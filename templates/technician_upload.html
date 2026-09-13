@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Завантаження резюме — Maintenance Ticket Router</title>
+<style>
+  :root {
+    --bg-start: #f5efe6;
+    --bg-end: #ede3d3;
+    --card-bg: #fffdf9;
+    --card-border: #e8dcc8;
+    --field-bg: #faf5eb;
+    --field-border: #ddccb0;
+    --field-border-focus: #c1652f;
+    --text: #3a2e26;
+    --text-muted: #8a7761;
+    --accent: #c1652f;
+    --accent-hover: #a85426;
+    --green: #5b7b4b;
+    --red: #a63d2f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(160deg, var(--bg-start), var(--bg-end));
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(58, 46, 38, 0.12);
+    padding: 32px 28px;
+    height: fit-content;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin: 0 0 22px; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  input[type="email"], input[type="file"] {
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 16px;
+    font-family: inherit;
+  }
+  input:focus { outline: none; border-color: var(--field-border-focus); }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: #fff8f0;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  .msg {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .msg.error {
+    background: rgba(166, 61, 47, 0.1);
+    border: 1px solid rgba(166, 61, 47, 0.35);
+    color: #8a3223;
+  }
+  .msg.success {
+    background: rgba(91, 123, 75, 0.12);
+    border: 1px solid rgba(91, 123, 75, 0.35);
+    color: var(--green);
+  }
+  .upload-form { margin-top: 20px; }
+  .hint { font-size: 12px; color: var(--text-muted); margin: -8px 0 16px; }
+  .profile {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--field-border);
+  }
+  .profile .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .profile .name { font-weight: 700; margin-bottom: 12px; }
+  .profile .summary {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+  .profile .summary.muted { color: var(--text-muted); font-style: italic; }
+  .profile .uploaded-at { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Завантаження резюме</h1>
+    <p class="subtitle">Вкажіть свій email, щоб завантажити резюме та отримати AI-саммарі навичок для системи призначення заявок.</p>
+
+    {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+    {% if success %}<div class="msg success">{{ success }}</div>{% endif %}
+
+    <form method="get" action="{{ url_for('tickets.technician_upload_form') }}">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" value="{{ email }}" placeholder="you@example.com" required>
+      <button type="submit">Перевірити email</button>
+    </form>
+
+    {% if technician %}
+    <form class="upload-form" method="post" action="{{ url_for('tickets.technician_upload_submit') }}" enctype="multipart/form-data">
+      <input type="hidden" name="email" value="{{ email }}">
+      <label for="resume">Файл резюме (PDF або DOCX)</label>
+      <input type="file" id="resume" name="resume" accept=".pdf,.docx" required>
+      <p class="hint">Лише текстові документи — скановані зображення без тексту не розпізнаються.</p>
+      <button type="submit">Завантажити та згенерувати саммарі</button>
+    </form>
+
+    <div class="profile">
+      <div class="label">Профіль</div>
+      <div class="name">{{ technician.name }} — {{ technician.specialty }}</div>
+      {% if technician.resume_summary %}
+        <div class="summary">{{ technician.resume_summary }}</div>
+        <div class="uploaded-at">
+          Оновлено: {{ technician.resume_uploaded_at.strftime('%Y-%m-%d %H:%M') if technician.resume_uploaded_at else "—" }} UTC
+        </div>
+      {% else %}
+        <div class="summary muted">Резюме ще не завантажено.</div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

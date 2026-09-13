@@ -1,10 +1,12 @@
 import logging
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, render_template, request
 
 from ai_classifier import classify_ticket
 from email_notifier import send_confirmation_email, send_technician_notification
 from models import STATUSES, Technician, Ticket, db
+from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
 from translations import TRANSLATIONS, DEFAULT_LANG
 
 logger = logging.getLogger(__name__)
@@ -123,6 +125,66 @@ def confirm_ticket(ticket_id):
     return jsonify(ticket.to_dict(include_assignee=True))
 
 
+def _find_technician_by_email(email):
+    if not email:
+        return None
+    return Technician.query.filter(db.func.lower(Technician.email) == email.strip().lower()).first()
+
+
+@bp.route("/technician/upload", methods=["GET"])
+def technician_upload_form():
+    email = (request.args.get("email") or "").strip()
+    technician = None
+    error = None
+
+    if email:
+        technician = _find_technician_by_email(email)
+        if technician is None:
+            error = "Майстра з таким email не знайдено."
+
+    return render_template(
+        "technician_upload.html", email=email, technician=technician, error=error, success=None
+    )
+
+
+@bp.route("/technician/upload", methods=["POST"])
+def technician_upload_submit():
+    email = (request.form.get("email") or "").strip()
+    technician = _find_technician_by_email(email)
+    error = None
+    success = None
+
+    if not email:
+        error = "Вкажіть email."
+    elif technician is None:
+        error = "Майстра з таким email не знайдено."
+    else:
+        file = request.files.get("resume")
+        if file is None or not file.filename:
+            error = "Виберіть файл резюме (PDF або DOCX)."
+        elif not allowed_filename(file.filename):
+            error = "Підтримуються лише файли у форматі PDF або DOCX."
+        else:
+            try:
+                file_bytes = file.read()
+                resume_text = extract_text(file.filename, file_bytes)
+                summary = generate_summary(resume_text)
+            except ResumeProcessingError as exc:
+                error = str(exc)
+            except Exception:
+                logger.exception("Не вдалося обробити резюме для %s", email)
+                error = "Не вдалося згенерувати саммарі. Спробуйте ще раз пізніше."
+            else:
+                technician.resume_summary = summary
+                technician.resume_uploaded_at = datetime.now(timezone.utc)
+                db.session.commit()
+                success = "Резюме успішно оброблено, саммарі збережено."
+
+    return render_template(
+        "technician_upload.html", email=email, technician=technician, error=error, success=success
+    )
+
+
 @bp.route("/dashboard", methods=["GET"])
 def dashboard():
     stats, _ = _build_dashboard_stats()
@@ -133,7 +195,10 @@ def dashboard():
 def dashboard_view():
     stats, tickets = _build_dashboard_stats()
     recent_tickets = [t.to_dict(include_assignee=True) for t in tickets[:10]]
-    return render_template("dashboard.html", stats=stats, tickets=recent_tickets)
+    technicians = Technician.query.order_by(Technician.name).all()
+    return render_template(
+        "dashboard.html", stats=stats, tickets=recent_tickets, technicians=technicians
+    )
 
 
 @bp.route("/tickets", methods=["GET"])

@@ -56,6 +56,7 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = _normalized_database_url()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev")
+    app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB, for resume uploads
 
     db.init_app(app)
     app.register_blueprint(tickets_bp)

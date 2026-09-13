@@ -115,6 +115,19 @@
     letter-spacing: 0.04em;
     margin: 0 0 12px;
   }
+  .tech-list { display: flex; flex-direction: column; gap: 12px; }
+  .tech-card {
+    background: #ffffff;
+    border: 1px solid #e3e5e8;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .tech-name { font-weight: 600; }
+  .tech-specialty { font-weight: 400; color: #6b7280; font-size: 13px; }
+  .tech-contact { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .tech-summary { font-size: 13px; color: #374151; margin-top: 8px; line-height: 1.5; }
+  .tech-summary.muted { color: #9ca3af; font-style: italic; }
+  .tech-updated { font-size: 11px; color: #9ca3af; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -160,6 +173,28 @@
       <span class="stat-pill">{{ name }}: <b>{{ count }}</b></span>
       {% endfor %}
     </div>
+  </section>
+
+  <section>
+    <h2>Майстри</h2>
+    {% if technicians %}
+    <div class="tech-list">
+      {% for tech in technicians %}
+      <div class="tech-card">
+        <div class="tech-name">{{ tech.name }} <span class="tech-specialty">({{ tech.specialty }})</span></div>
+        <div class="tech-contact">{{ tech.email or "—" }}{% if tech.phone %} · {{ tech.phone }}{% endif %}</div>
+        {% if tech.resume_summary %}
+        <div class="tech-summary">{{ tech.resume_summary }}</div>
+        <div class="tech-updated">Резюме оновлено: {{ tech.resume_uploaded_at.strftime('%Y-%m-%d %H:%M') if tech.resume_uploaded_at else "—" }} UTC</div>
+        {% else %}
+        <div class="tech-summary muted">Резюме не завантажено.</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">Майстрів ще немає</div>
+    {% endif %}
   </section>
 
   <section>

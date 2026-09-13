@@ -23,6 +23,8 @@ class Technician(db.Model):
     available = db.Column(db.Boolean, nullable=False, default=True)
     email = db.Column(db.String(255), nullable=True)
     phone = db.Column(db.String(30), nullable=True)
+    resume_summary = db.Column(db.Text, nullable=True)
+    resume_uploaded_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     tickets = db.relationship("Ticket", back_populates="assignee")
 
