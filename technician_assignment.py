@@ -110,7 +110,10 @@ def _select_with_claude(ticket, candidates, stats_by_id):
         f"Кандидати:\n\n{candidates_block}"
     )
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # The SDK default read timeout is 600s (plus retries) - far too long to
+    # block a ticket-creation web request, so cap it well below the request
+    # timeout of whatever's fronting this app.
+    client = anthropic.Anthropic(api_key=api_key, timeout=20.0, max_retries=1)
 
     try:
         response = client.messages.create(

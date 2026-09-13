@@ -62,7 +62,10 @@ def classify_ticket(description: str) -> dict:
         logger.warning("ANTHROPIC_API_KEY is not set; using fallback classification")
         return dict(FALLBACK_RESULT)
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # The SDK default read timeout is 600s (plus retries) - far too long to
+    # block a ticket-creation web request, so cap it well below the request
+    # timeout of whatever's fronting this app.
+    client = anthropic.Anthropic(api_key=api_key, timeout=20.0, max_retries=1)
 
     try:
         response = client.messages.create(
