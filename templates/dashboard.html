@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Панель заявок — Maintenance Ticket Router</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: #f4f5f7;
+    color: #1f2328;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  h1 {
+    margin: 0 0 24px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .card {
+    background: #ffffff;
+    border: 1px solid #e3e5e8;
+    border-radius: 10px;
+    padding: 18px 22px;
+    min-width: 180px;
+  }
+  .card .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin-bottom: 8px;
+  }
+  .card .value {
+    font-size: 30px;
+    font-weight: 700;
+  }
+  .card.total .value { color: #1f2328; }
+  .card.wide { flex: 1 1 320px; }
+  .badge-row, .stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .badge {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+  }
+  .badge .count { font-size: 15px; }
+  .badge-emergency { background: #dc2626; }
+  .badge-high { background: #f97316; }
+  .badge-medium { background: #eab308; color: #3b2f00; }
+  .badge-low { background: #16a34a; }
+  .stat-pill {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #f1f2f4;
+    font-size: 13px;
+    color: #374151;
+  }
+  .stat-pill b { color: #111827; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border: 1px solid #e3e5e8;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid #eef0f2;
+  }
+  th {
+    background: #fafbfc;
+    color: #6b7280;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.description { max-width: 360px; color: #4b5563; }
+  .pill {
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+  }
+  .empty {
+    padding: 24px;
+    text-align: center;
+    color: #9ca3af;
+  }
+  section { margin-bottom: 28px; }
+  section h2 {
+    font-size: 14px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 12px;
+  }
+</style>
+</head>
+<body>
+  <h1>Панель заявок</h1>
+
+  <div class="cards">
+    <div class="card total">
+      <div class="label">Всього заявок</div>
+      <div class="value">{{ stats.total_tickets }}</div>
+    </div>
+
+    <div class="card wide">
+      <div class="label">За пріоритетом</div>
+      <div class="badge-row">
+        <span class="badge badge-emergency">emergency <span class="count">{{ stats.by_priority.emergency }}</span></span>
+        <span class="badge badge-high">high <span class="count">{{ stats.by_priority.high }}</span></span>
+        <span class="badge badge-medium">medium <span class="count">{{ stats.by_priority.medium }}</span></span>
+        <span class="badge badge-low">low <span class="count">{{ stats.by_priority.low }}</span></span>
+      </div>
+    </div>
+
+    {% if stats.avg_response_time is defined %}
+    <div class="card">
+      <div class="label">Сер. час до призначення</div>
+      <div class="value">{{ stats.avg_response_time }}<span style="font-size:16px;font-weight:600;"> хв</span></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <section>
+    <h2>За категорією</h2>
+    <div class="stat-row">
+      {% for name, count in stats.by_category.items() %}
+      <span class="stat-pill">{{ name }}: <b>{{ count }}</b></span>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h2>За статусом</h2>
+    <div class="stat-row">
+      {% for name, count in stats.by_status.items() %}
+      <span class="stat-pill">{{ name }}: <b>{{ count }}</b></span>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Останні заявки</h2>
+    {% if tickets %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Опис</th>
+          <th>Категорія</th>
+          <th>Пріоритет</th>
+          <th>Статус</th>
+          <th>Призначено</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tickets %}
+        <tr>
+          <td>#{{ t.id }}</td>
+          <td class="description">{{ t.description or "—" }}</td>
+          <td>{{ t.category or "—" }}</td>
+          <td>
+            {% if t.priority %}
+            <span class="pill badge-{{ t.priority }}">{{ t.priority }}</span>
+            {% else %}
+            —
+            {% endif %}
+          </td>
+          <td>{{ t.status }}</td>
+          <td>{{ t.assignee.name if t.assignee else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Заявок ще немає</div>
+    {% endif %}
+  </section>
+</body>
+</html>
