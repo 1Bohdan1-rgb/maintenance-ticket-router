@@ -11,6 +11,7 @@ from email_notifier import (
 )
 from models import STATUSES, Technician, Ticket, db
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
+from technician_assignment import select_technician
 from translations import TRANSLATIONS, DEFAULT_LANG
 
 logger = logging.getLogger(__name__)
@@ -83,15 +84,15 @@ def create_ticket():
     ticket.priority = classification["priority"]
     ticket.urgency_reason = classification["urgency_reason"]
 
-    technician = Technician.query.filter_by(
-        specialty=ticket.category, available=True
-    ).first()
+    technician, reasoning = select_technician(ticket)
 
     if technician:
         ticket.assigned_to = technician.id
+        ticket.assignment_reasoning = reasoning
         ticket.status = "assigned"
     else:
         ticket.assigned_to = None
+        ticket.assignment_reasoning = None
         ticket.status = "pending_assignment"
 
     db.session.commit()

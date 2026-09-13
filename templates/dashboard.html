@@ -272,7 +272,7 @@
             {% endif %}
           </td>
           <td>{{ t.status }}</td>
-          <td>{{ t.assignee.name if t.assignee else "—" }}</td>
+          <td{% if t.assignment_reasoning %} title="{{ t.assignment_reasoning }}"{% endif %}>{{ t.assignee.name if t.assignee else "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>

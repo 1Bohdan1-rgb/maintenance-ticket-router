@@ -55,6 +55,7 @@ class Ticket(db.Model):
     completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     client_rating = db.Column(db.Integer, nullable=True)
     client_review = db.Column(db.Text, nullable=True)
+    assignment_reasoning = db.Column(db.Text, nullable=True)
 
     assignee = db.relationship("Technician", back_populates="tickets")
 
@@ -74,6 +75,7 @@ class Ticket(db.Model):
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "client_rating": self.client_rating,
             "client_review": self.client_review,
+            "assignment_reasoning": self.assignment_reasoning,
         }
         if include_assignee:
             data["assignee"] = self.assignee.to_dict() if self.assignee else None
