@@ -6,33 +6,44 @@
 <title>{{ t.meta_title }}</title>
 <style>
   :root {
-    --bg: #17181a;
-    --card-bg: #24262a;
-    --card-border: #34383e;
-    --field-bg: #1c1e21;
-    --field-border: #3a3f45;
-    --field-border-focus: #f97316;
-    --text: #f2f3f4;
-    --text-muted: #9aa0a6;
-    --orange: #f97316;
-    --orange-hover: #fb8c3c;
-    --yellow: #fbbf24;
-    --red: #dc2626;
-    --green: #16a34a;
+    --bg-start: #f5efe6;
+    --bg-end: #ede3d3;
+    --card-bg: #fffdf9;
+    --card-border: #e8dcc8;
+    --field-bg: #faf5eb;
+    --field-border: #ddccb0;
+    --field-border-focus: #c1652f;
+    --text: #3a2e26;
+    --text-muted: #8a7761;
+    --accent: #c1652f;
+    --accent-hover: #a8542699;
+    --accent-hover-solid: #a85426;
+    --accent-soft: rgba(193, 101, 47, 0.14);
+    --red: #a63d2f;
+    --orange: #c1652f;
+    --gold: #c99a3b;
+    --green: #5b7b4b;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
-    background: var(--bg);
-    background-image:
-      radial-gradient(circle at 15% 10%, rgba(249, 115, 22, 0.08), transparent 40%),
-      radial-gradient(circle at 85% 90%, rgba(251, 191, 36, 0.06), transparent 40%);
+    position: relative;
+    background: linear-gradient(160deg, var(--bg-start), var(--bg-end));
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     display: flex;
     justify-content: center;
     padding: 32px 16px 60px;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 0;
   }
   .page {
     width: 100%;
@@ -40,6 +51,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    position: relative;
+    z-index: 1;
   }
   .lang-switcher {
     display: flex;
@@ -47,7 +60,7 @@
     margin-bottom: 20px;
   }
   .lang-btn {
-    background: transparent;
+    background: var(--card-bg);
     border: 1px solid var(--field-border);
     color: var(--text-muted);
     padding: 6px 16px;
@@ -58,29 +71,19 @@
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
-  .lang-btn:hover { border-color: var(--orange); color: var(--text); }
+  .lang-btn:hover { border-color: var(--accent); color: var(--text); }
   .lang-btn.active {
-    background: var(--orange);
-    border-color: var(--orange);
-    color: #1a1a1a;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff8f0;
   }
   .card {
     width: 100%;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 18px;
-    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 20px 45px rgba(58, 46, 38, 0.12);
     overflow: hidden;
-  }
-  .hazard-bar {
-    height: 7px;
-    background: repeating-linear-gradient(
-      45deg,
-      var(--yellow),
-      var(--yellow) 12px,
-      #1a1a1a 12px,
-      #1a1a1a 24px
-    );
   }
   .card-inner { padding: 32px 28px 28px; }
   .brand { text-align: center; margin-bottom: 28px; }
@@ -125,17 +128,17 @@
     resize: vertical;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  textarea::placeholder, input::placeholder { color: #6b7178; }
+  textarea::placeholder, input::placeholder { color: #ab9a85; }
   textarea:focus, input:focus {
     outline: none;
     border-color: var(--field-border-focus);
-    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
   input[type="email"] { padding-top: 12px; padding-bottom: 12px; }
   .submit-btn {
     width: 100%;
-    background: var(--orange);
-    color: #1a1305;
+    background: var(--accent);
+    color: #fff8f0;
     border: none;
     border-radius: 10px;
     padding: 14px;
@@ -145,13 +148,13 @@
     cursor: pointer;
     transition: background 0.15s, transform 0.1s;
   }
-  .submit-btn:hover:not(:disabled) { background: var(--orange-hover); }
+  .submit-btn:hover:not(:disabled) { background: var(--accent-hover-solid); }
   .submit-btn:active:not(:disabled) { transform: scale(0.98); }
   .submit-btn:disabled { opacity: 0.7; cursor: default; }
   .form-error {
-    background: rgba(220, 38, 38, 0.12);
-    border: 1px solid rgba(220, 38, 38, 0.4);
-    color: #fca5a5;
+    background: rgba(166, 61, 47, 0.1);
+    border: 1px solid rgba(166, 61, 47, 0.35);
+    color: #8a3223;
     border-radius: 8px;
     padding: 10px 12px;
     font-size: 13px;
@@ -179,7 +182,7 @@
     align-items: center;
     gap: 12px;
     padding: 10px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(58, 46, 38, 0.08);
   }
   .result-row:last-of-type { border-bottom: none; }
   .result-row .label {
@@ -209,11 +212,11 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 700;
-    color: #fff;
+    color: #fff8f0;
   }
   .badge-emergency { background: var(--red); }
   .badge-high { background: var(--orange); }
-  .badge-medium { background: var(--yellow); color: #3b2f00; }
+  .badge-medium { background: var(--gold); color: #3a2e26; }
   .badge-low { background: var(--green); }
 
   .new-request-btn {
@@ -228,7 +231,7 @@
     font-weight: 700;
     cursor: pointer;
   }
-  .new-request-btn:hover { border-color: var(--orange); color: var(--orange); }
+  .new-request-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   @media (max-width: 420px) {
     body { padding: 20px 10px 40px; }
@@ -246,7 +249,6 @@
     </div>
 
     <div class="card">
-      <div class="hazard-bar"></div>
       <div class="card-inner">
         <div class="brand">
           <div class="brand-icons">🔧🛠️⚡🔩</div>
