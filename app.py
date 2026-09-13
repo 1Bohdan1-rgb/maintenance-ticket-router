@@ -11,10 +11,34 @@ from translations import DEFAULT_LANG, TRANSLATIONS
 load_dotenv()
 
 SEED_TECHNICIANS = [
-    {"name": "Oksana Melnyk", "specialty": "plumbing", "available": True},
-    {"name": "Ivan Petrenko", "specialty": "electrical", "available": True},
-    {"name": "Sergiy Boyko", "specialty": "carpentry", "available": False},
-    {"name": "Nadia Kravets", "specialty": "general", "available": True},
+    {
+        "name": "Oksana Melnyk",
+        "specialty": "plumbing",
+        "available": True,
+        "email": "oksana@example.com",
+        "phone": "+380671234567",
+    },
+    {
+        "name": "Ivan Petrenko",
+        "specialty": "electrical",
+        "available": True,
+        "email": "ivan@example.com",
+        "phone": "+380509876543",
+    },
+    {
+        "name": "Sergiy Boyko",
+        "specialty": "carpentry",
+        "available": False,
+        "email": "sergiy@example.com",
+        "phone": "+380631112233",
+    },
+    {
+        "name": "Nadia Kravets",
+        "specialty": "general",
+        "available": True,
+        "email": "nadia@example.com",
+        "phone": "+380971239876",
+    },
 ]
 
 

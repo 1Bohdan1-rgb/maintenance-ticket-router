@@ -262,6 +262,44 @@
   .badge-medium { background: var(--gold); color: #3a2e26; }
   .badge-low { background: var(--green); }
 
+  .confirm-btn {
+    width: 100%;
+    margin-top: 18px;
+    background: var(--accent);
+    color: #fff8f0;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .confirm-btn:hover:not(:disabled) { background: var(--accent-hover-solid); }
+  .confirm-btn:active:not(:disabled) { transform: scale(0.98); }
+  .confirm-btn:disabled { opacity: 0.7; cursor: default; }
+  .confirm-success {
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    background: rgba(91, 123, 75, 0.12);
+    border: 1px solid rgba(91, 123, 75, 0.35);
+    color: var(--green);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .confirm-error {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    background: rgba(166, 61, 47, 0.1);
+    border: 1px solid rgba(166, 61, 47, 0.35);
+    color: #8a3223;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: center;
+  }
   .new-request-btn {
     width: 100%;
     margin-top: 20px;
@@ -352,6 +390,10 @@
             <span id="result-reason-value"></span>
           </div>
 
+          <button type="button" class="confirm-btn" id="confirm-btn" data-i18n="confirm_button"></button>
+          <p class="confirm-success hidden" id="confirm-success" data-i18n="confirm_success"></p>
+          <p class="confirm-error hidden" id="confirm-error"></p>
+
           <button type="button" class="new-request-btn" id="new-request-btn" data-i18n="new_request_button"></button>
         </div>
       </div>
@@ -370,6 +412,7 @@
   const TRANSLATIONS = {{ translations_json|safe }};
   let currentLang = "{{ default_lang }}";
   let lastResult = null;
+  let ticketConfirmed = false;
 
   function applyLang(lang) {
     if (!TRANSLATIONS[lang]) return;
@@ -422,9 +465,50 @@
       reasonRow.classList.add('hidden');
     }
 
+    const confirmBtn = document.getElementById('confirm-btn');
+    const confirmSuccess = document.getElementById('confirm-success');
+    document.getElementById('confirm-error').classList.add('hidden');
+    if (ticketConfirmed) {
+      confirmBtn.classList.add('hidden');
+      confirmSuccess.textContent = t.confirm_success;
+      confirmSuccess.classList.remove('hidden');
+    } else {
+      confirmBtn.textContent = t.confirm_button;
+      confirmBtn.disabled = false;
+      confirmBtn.classList.remove('hidden');
+      confirmSuccess.classList.add('hidden');
+    }
+
     document.getElementById('new-request-btn').textContent = t.new_request_button;
     document.getElementById('result').classList.remove('hidden');
   }
+
+  document.getElementById('confirm-btn').addEventListener('click', async () => {
+    const t = TRANSLATIONS[currentLang];
+    const confirmBtn = document.getElementById('confirm-btn');
+    const confirmError = document.getElementById('confirm-error');
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = t.confirm_button_loading;
+    confirmError.classList.add('hidden');
+
+    try {
+      const response = await fetch(`/tickets/${lastResult.id}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) throw new Error('confirm failed');
+
+      ticketConfirmed = true;
+      renderResult(lastResult);
+    } catch (err) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = t.confirm_button;
+      confirmError.textContent = t.confirm_error;
+      confirmError.classList.remove('hidden');
+    }
+  });
 
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', () => applyLang(btn.dataset.lang));
@@ -468,6 +552,7 @@
       if (!response.ok) throw new Error('request failed');
 
       const data = await response.json();
+      ticketConfirmed = false;
       renderResult(data);
       form.reset();
     } catch (err) {
@@ -482,6 +567,7 @@
   document.getElementById('new-request-btn').addEventListener('click', () => {
     document.getElementById('result').classList.add('hidden');
     lastResult = null;
+    ticketConfirmed = false;
   });
 
   applyLang(currentLang);

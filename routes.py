@@ -3,7 +3,7 @@ import logging
 from flask import Blueprint, jsonify, render_template, request
 
 from ai_classifier import classify_ticket
-from email_notifier import send_confirmation_email
+from email_notifier import send_confirmation_email, send_technician_notification
 from models import STATUSES, Technician, Ticket, db
 from translations import TRANSLATIONS, DEFAULT_LANG
 
@@ -74,6 +74,7 @@ def create_ticket():
     classification = classify_ticket(description or "")
     ticket.category = classification["category"]
     ticket.priority = classification["priority"]
+    ticket.urgency_reason = classification["urgency_reason"]
 
     technician = Technician.query.filter_by(
         specialty=ticket.category, available=True
@@ -97,8 +98,29 @@ def create_ticket():
             )
 
     response = ticket.to_dict(include_assignee=True)
-    response["urgency_reason"] = classification["urgency_reason"]
+    response["ticket_id"] = ticket.id
     return jsonify(response), 201
+
+
+@bp.route("/tickets/<int:ticket_id>/confirm", methods=["POST"])
+def confirm_ticket(ticket_id):
+    ticket = Ticket.query.get(ticket_id)
+    if ticket is None:
+        return jsonify({"error": "ticket not found"}), 404
+
+    if ticket.status != "confirmed":
+        technician = ticket.assignee
+        if technician:
+            try:
+                send_technician_notification(ticket, technician)
+            except Exception:
+                logger.exception(
+                    "Не вдалося надіслати email майстру для заявки #%s", ticket.id
+                )
+        ticket.status = "confirmed"
+        db.session.commit()
+
+    return jsonify(ticket.to_dict(include_assignee=True))
 
 
 @bp.route("/dashboard", methods=["GET"])

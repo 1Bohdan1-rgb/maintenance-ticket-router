@@ -47,3 +47,47 @@ def send_confirmation_email(ticket, technician=None, lang="uk"):
         server.starttls()
         server.login(smtp_user, smtp_password)
         server.send_message(message)
+
+
+def send_technician_notification(ticket, technician):
+    """Notify the assigned technician that a customer confirmed a ticket.
+
+    Raises on missing SMTP configuration, a technician without an email, or
+    any send failure - callers are expected to catch and log, since a failed
+    email must not block the confirmation itself.
+    """
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = os.environ.get("SMTP_PORT")
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+
+    if not all([smtp_host, smtp_port, smtp_user, smtp_password]):
+        raise RuntimeError(
+            "SMTP is not configured (SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD)"
+        )
+
+    if not technician or not technician.email:
+        raise RuntimeError("Assigned technician has no email address")
+
+    ui = get_translation("uk")
+    category_name = ui["category_names"].get(ticket.category, ticket.category or "—")
+    priority_name = ui["priority_names"].get(ticket.priority, ticket.priority or "—")
+    customer_contact = ticket.customer_email or "клієнт не залишив контакт"
+
+    lines = [
+        f"Опис проблеми: {ticket.description or '—'}",
+        f"Пріоритет: {priority_name}",
+        f"Обґрунтування: {ticket.urgency_reason or '—'}",
+        f"Контакт клієнта: {customer_contact}",
+    ]
+
+    message = EmailMessage()
+    message["Subject"] = f"Нова заявка #{ticket.id}: {category_name}"
+    message["From"] = smtp_user
+    message["To"] = technician.email
+    message.set_content("\n".join(lines))
+
+    with smtplib.SMTP(smtp_host, int(smtp_port), timeout=10) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(message)

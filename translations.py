@@ -21,6 +21,10 @@ TRANSLATIONS = {
         "technician_label": "Assigned technician",
         "unassigned_text": "Not assigned yet — pending availability",
         "reason_label": "Reason",
+        "confirm_button": "Confirm Ticket",
+        "confirm_button_loading": "Confirming…",
+        "confirm_success": "Ticket confirmed, technician notified",
+        "confirm_error": "Could not confirm the ticket. Please try again.",
         "category_names": {
             "plumbing": "Plumbing",
             "electrical": "Electrical",
@@ -63,6 +67,10 @@ TRANSLATIONS = {
         "technician_label": "Przypisany technik",
         "unassigned_text": "Jeszcze nieprzypisane — oczekuje na dostępność",
         "reason_label": "Uzasadnienie",
+        "confirm_button": "Potwierdź zgłoszenie",
+        "confirm_button_loading": "Potwierdzanie…",
+        "confirm_success": "Zgłoszenie potwierdzone, technik powiadomiony",
+        "confirm_error": "Nie udało się potwierdzić zgłoszenia. Spróbuj ponownie.",
         "category_names": {
             "plumbing": "Hydraulika",
             "electrical": "Elektryka",
@@ -105,6 +113,10 @@ TRANSLATIONS = {
         "technician_label": "Призначений майстер",
         "unassigned_text": "Ще не призначено — очікує на доступного майстра",
         "reason_label": "Обґрунтування",
+        "confirm_button": "Підтвердити заявку",
+        "confirm_button_loading": "Підтвердження…",
+        "confirm_success": "Заявку підтверджено, майстер сповіщений",
+        "confirm_error": "Не вдалося підтвердити заявку. Спробуйте ще раз.",
         "category_names": {
             "plumbing": "Сантехніка",
             "electrical": "Електрика",
