@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мої заявки — Maintenance Ticket Router</title>
+<style>
+  :root {
+    --bg-start: #f5efe6;
+    --bg-end: #ede3d3;
+    --card-bg: #fffdf9;
+    --card-border: #e8dcc8;
+    --field-bg: #faf5eb;
+    --field-border: #ddccb0;
+    --field-border-focus: #c1652f;
+    --text: #3a2e26;
+    --text-muted: #8a7761;
+    --accent: #c1652f;
+    --accent-hover: #a85426;
+    --green: #5b7b4b;
+    --red: #a63d2f;
+    --gold: #c99a3b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(160deg, var(--bg-start), var(--bg-end));
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .page { width: 100%; max-width: 620px; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(58, 46, 38, 0.12);
+    padding: 32px 28px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin: 0 0 22px; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  input[type="email"] {
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 16px;
+    font-family: inherit;
+  }
+  input:focus { outline: none; border-color: var(--field-border-focus); }
+  button {
+    background: var(--accent);
+    color: #fff8f0;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button.wide { width: 100%; padding: 12px; font-size: 14px; }
+  button:hover { background: var(--accent-hover); }
+  .msg {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .msg.error {
+    background: rgba(166, 61, 47, 0.1);
+    border: 1px solid rgba(166, 61, 47, 0.35);
+    color: #8a3223;
+  }
+  .tickets { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+  .ticket-card {
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .ticket-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .ticket-title { font-weight: 700; font-size: 14px; }
+  .ticket-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff8f0;
+    white-space: nowrap;
+  }
+  .badge-emergency { background: var(--red); }
+  .badge-high { background: var(--accent); }
+  .badge-medium { background: var(--gold); color: #3a2e26; }
+  .badge-low { background: var(--green); }
+  .status-tag {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+  .status-completed { color: var(--green); }
+  .review-preview {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-top: 1px dashed var(--field-border);
+    padding-top: 8px;
+  }
+  .empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <h1>Мої заявки</h1>
+      <p class="subtitle">Вкажіть свій email, щоб побачити призначені вам заявки та позначити виконані.</p>
+
+      {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+
+      <form method="get" action="{{ url_for('tickets.technician_dashboard_view') }}">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{{ email }}" placeholder="you@example.com" required>
+        <button type="submit" class="wide">Переглянути мої заявки</button>
+      </form>
+
+      {% if technician %}
+      <div class="tickets">
+        {% if tickets %}
+          {% for ticket in tickets %}
+          <div class="ticket-card">
+            <div class="ticket-top">
+              <div class="ticket-title">#{{ ticket.id }} {{ ticket.title }}</div>
+              {% if ticket.priority %}<span class="pill badge-{{ ticket.priority }}">{{ ticket.priority }}</span>{% endif %}
+            </div>
+            <div class="ticket-meta">{{ ticket.description or "—" }}</div>
+
+            {% if ticket.status == "completed" %}
+              <span class="status-tag status-completed">✓ Завершено {{ ticket.completed_at.strftime('%Y-%m-%d %H:%M') if ticket.completed_at else "" }} UTC</span>
+              {% if ticket.client_rating %}
+              <div class="review-preview">
+                Оцінка клієнта: {{ ticket.client_rating }}/5
+                {% if ticket.client_review %}<br>«{{ ticket.client_review }}»{% endif %}
+              </div>
+              {% else %}
+              <div class="review-preview">Клієнт ще не залишив відгук.</div>
+              {% endif %}
+            {% else %}
+              <span class="status-tag">Статус: {{ ticket.status }}</span>
+              <form method="post" action="{{ url_for('tickets.technician_complete_ticket', ticket_id=ticket.id) }}" style="margin-top:10px;">
+                <input type="hidden" name="email" value="{{ email }}">
+                <button type="submit">Завершено</button>
+              </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty">Заявок, призначених вам, поки немає.</div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

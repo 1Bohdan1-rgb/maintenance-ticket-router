@@ -128,6 +128,24 @@
   .tech-summary { font-size: 13px; color: #374151; margin-top: 8px; line-height: 1.5; }
   .tech-summary.muted { color: #9ca3af; font-style: italic; }
   .tech-updated { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+  .completed-list { display: flex; flex-direction: column; gap: 12px; }
+  .completed-card {
+    background: #ffffff;
+    border: 1px solid #e3e5e8;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .completed-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .completed-title { font-weight: 600; font-size: 13px; }
+  .rating { font-size: 13px; font-weight: 700; color: #c99a3b; white-space: nowrap; }
+  .rating.none { color: #9ca3af; font-weight: 400; font-style: italic; }
+  .completed-meta { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .completed-review { font-size: 13px; color: #374151; margin-top: 8px; line-height: 1.5; font-style: italic; }
 </style>
 </head>
 <body>
@@ -194,6 +212,35 @@
     </div>
     {% else %}
     <div class="empty">Майстрів ще немає</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Завершені заявки</h2>
+    {% if completed_tickets %}
+    <div class="completed-list">
+      {% for ticket in completed_tickets %}
+      <div class="completed-card">
+        <div class="completed-top">
+          <div class="completed-title">#{{ ticket.id }} {{ ticket.title }}</div>
+          {% if ticket.client_rating %}
+          <div class="rating">{{ "★" * ticket.client_rating }}{{ "☆" * (5 - ticket.client_rating) }} ({{ ticket.client_rating }}/5)</div>
+          {% else %}
+          <div class="rating none">без відгуку</div>
+          {% endif %}
+        </div>
+        <div class="completed-meta">
+          {{ ticket.category or "—" }} · {{ ticket.assignee.name if ticket.assignee else "—" }} ·
+          завершено {{ ticket.completed_at.strftime('%Y-%m-%d %H:%M') if ticket.completed_at else "—" }} UTC
+        </div>
+        {% if ticket.client_review %}
+        <div class="completed-review">«{{ ticket.client_review }}»</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">Завершених заявок ще немає</div>
     {% endif %}
   </section>
 

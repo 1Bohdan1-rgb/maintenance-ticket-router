@@ -7,7 +7,7 @@ db = SQLAlchemy()
 SPECIALTIES = ("plumbing", "electrical", "carpentry", "general")
 CATEGORIES = ("plumbing", "electrical", "carpentry", "general", "other")
 PRIORITIES = ("low", "medium", "high", "emergency")
-STATUSES = ("new", "pending_assignment", "assigned", "confirmed", "in_progress", "resolved", "closed")
+STATUSES = ("new", "pending_assignment", "assigned", "confirmed", "completed", "in_progress", "resolved", "closed")
 
 
 def _utcnow():
@@ -48,9 +48,13 @@ class Ticket(db.Model):
     status = db.Column(db.String(20), nullable=False, default="new")
     customer_email = db.Column(db.String(255), nullable=True)
     urgency_reason = db.Column(db.Text, nullable=True)
+    lang = db.Column(db.String(5), nullable=True, default="uk")
     assigned_to = db.Column(db.Integer, db.ForeignKey("technicians.id"), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    client_rating = db.Column(db.Integer, nullable=True)
+    client_review = db.Column(db.Text, nullable=True)
 
     assignee = db.relationship("Technician", back_populates="tickets")
 
@@ -67,6 +71,9 @@ class Ticket(db.Model):
             "assigned_to": self.assigned_to,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "client_rating": self.client_rating,
+            "client_review": self.client_review,
         }
         if include_assignee:
             data["assignee"] = self.assignee.to_dict() if self.assignee else None

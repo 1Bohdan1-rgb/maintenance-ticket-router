@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from models import Technician, db
 from routes import bp as tickets_bp
@@ -53,6 +54,10 @@ def _normalized_database_url():
 
 def create_app():
     app = Flask(__name__)
+    # Render (and most PaaS hosts) sit behind a reverse proxy - without this,
+    # url_for(..., _external=True) generates http:// links (wrong scheme/host)
+    # for things like the completion-email review link.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
     app.config["SQLALCHEMY_DATABASE_URI"] = _normalized_database_url()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev")

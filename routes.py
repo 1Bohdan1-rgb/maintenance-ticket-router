@@ -1,10 +1,14 @@
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request, url_for
 
 from ai_classifier import classify_ticket
-from email_notifier import send_confirmation_email, send_technician_notification
+from email_notifier import (
+    send_completion_email,
+    send_confirmation_email,
+    send_technician_notification,
+)
 from models import STATUSES, Technician, Ticket, db
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
 from translations import TRANSLATIONS, DEFAULT_LANG
@@ -69,6 +73,7 @@ def create_ticket():
         description=description,
         status="new",
         customer_email=customer_email,
+        lang=lang,
     )
     db.session.add(ticket)
     db.session.commit()
@@ -185,6 +190,111 @@ def technician_upload_submit():
     )
 
 
+def _technician_tickets(technician):
+    return (
+        Ticket.query.filter_by(assigned_to=technician.id)
+        .order_by(Ticket.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+
+@bp.route("/technician/dashboard", methods=["GET"])
+def technician_dashboard_view():
+    email = (request.args.get("email") or "").strip()
+    technician = None
+    tickets = []
+    error = None
+
+    if email:
+        technician = _find_technician_by_email(email)
+        if technician is None:
+            error = "Майстра з таким email не знайдено."
+        else:
+            tickets = _technician_tickets(technician)
+
+    return render_template(
+        "technician_dashboard.html", email=email, technician=technician, tickets=tickets, error=error
+    )
+
+
+@bp.route("/technician/tickets/<int:ticket_id>/complete", methods=["POST"])
+def technician_complete_ticket(ticket_id):
+    email = (request.form.get("email") or "").strip()
+    technician = _find_technician_by_email(email)
+    ticket = Ticket.query.get(ticket_id)
+    error = None
+
+    if technician is None:
+        error = "Майстра з таким email не знайдено."
+    elif ticket is None or ticket.assigned_to != technician.id:
+        error = "Заявку не знайдено або вона не призначена вам."
+    elif ticket.status != "completed":
+        ticket.status = "completed"
+        ticket.completed_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        if ticket.customer_email:
+            try:
+                lang = ticket.lang if ticket.lang in TRANSLATIONS else DEFAULT_LANG
+                review_link = url_for(
+                    "tickets.ticket_review_form", ticket_id=ticket.id, _external=True
+                )
+                send_completion_email(ticket, review_link, lang=lang)
+            except Exception:
+                logger.exception(
+                    "Не вдалося надіслати email про завершення заявки #%s", ticket.id
+                )
+
+    tickets = _technician_tickets(technician) if technician else []
+    return render_template(
+        "technician_dashboard.html", email=email, technician=technician, tickets=tickets, error=error
+    )
+
+
+@bp.route("/tickets/<int:ticket_id>/review", methods=["GET"])
+def ticket_review_form(ticket_id):
+    ticket = Ticket.query.get(ticket_id)
+    if ticket is None:
+        return jsonify({"error": "ticket not found"}), 404
+
+    lang = ticket.lang if ticket.lang in TRANSLATIONS else DEFAULT_LANG
+    return render_template(
+        "ticket_review.html", ticket=ticket, t=TRANSLATIONS[lang], lang=lang, success=None, error=None
+    )
+
+
+@bp.route("/tickets/<int:ticket_id>/review", methods=["POST"])
+def ticket_review_submit(ticket_id):
+    ticket = Ticket.query.get(ticket_id)
+    if ticket is None:
+        return jsonify({"error": "ticket not found"}), 404
+
+    lang = ticket.lang if ticket.lang in TRANSLATIONS else DEFAULT_LANG
+    t = TRANSLATIONS[lang]
+    error = None
+    success = None
+
+    if ticket.status != "completed":
+        error = t["review_not_completed_body"]
+    else:
+        try:
+            rating = int(request.form.get("rating"))
+            if rating < 1 or rating > 5:
+                raise ValueError
+        except (TypeError, ValueError):
+            error = t["review_error"]
+        else:
+            ticket.client_rating = rating
+            ticket.client_review = (request.form.get("review") or "").strip() or None
+            db.session.commit()
+            success = t["review_thanks"]
+
+    return render_template(
+        "ticket_review.html", ticket=ticket, t=t, lang=lang, success=success, error=error
+    )
+
+
 @bp.route("/dashboard", methods=["GET"])
 def dashboard():
     stats, _ = _build_dashboard_stats()
@@ -196,8 +306,18 @@ def dashboard_view():
     stats, tickets = _build_dashboard_stats()
     recent_tickets = [t.to_dict(include_assignee=True) for t in tickets[:10]]
     technicians = Technician.query.order_by(Technician.name).all()
+    completed_tickets = (
+        Ticket.query.filter_by(status="completed")
+        .order_by(Ticket.completed_at.desc())
+        .limit(10)
+        .all()
+    )
     return render_template(
-        "dashboard.html", stats=stats, tickets=recent_tickets, technicians=technicians
+        "dashboard.html",
+        stats=stats,
+        tickets=recent_tickets,
+        technicians=technicians,
+        completed_tickets=completed_tickets,
     )
 
 

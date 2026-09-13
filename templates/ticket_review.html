@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ t.meta_title }}</title>
+<style>
+  :root {
+    --bg-start: #f5efe6;
+    --bg-end: #ede3d3;
+    --card-bg: #fffdf9;
+    --card-border: #e8dcc8;
+    --field-bg: #faf5eb;
+    --field-border: #ddccb0;
+    --field-border-focus: #c1652f;
+    --text: #3a2e26;
+    --text-muted: #8a7761;
+    --accent: #c1652f;
+    --accent-hover: #a85426;
+    --green: #5b7b4b;
+    --red: #a63d2f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(160deg, var(--bg-start), var(--bg-end));
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(58, 46, 38, 0.12);
+    padding: 32px 28px;
+    height: fit-content;
+  }
+  h1 { font-size: 19px; margin: 0 0 20px; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .star-rating {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 6px;
+    font-size: 34px;
+    margin-bottom: 18px;
+  }
+  .star-rating input { display: none; }
+  .star-rating label {
+    display: inline-block;
+    margin: 0;
+    color: var(--field-border);
+    cursor: pointer;
+    transition: color 0.1s;
+  }
+  .star-rating input:checked ~ label,
+  .star-rating label:hover,
+  .star-rating label:hover ~ label {
+    color: var(--accent);
+  }
+  textarea {
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+    font-family: inherit;
+    margin-bottom: 18px;
+    resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: var(--field-border-focus); }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: #fff8f0;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  .msg {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .msg.error {
+    background: rgba(166, 61, 47, 0.1);
+    border: 1px solid rgba(166, 61, 47, 0.35);
+    color: #8a3223;
+  }
+  .msg.success {
+    background: rgba(91, 123, 75, 0.12);
+    border: 1px solid rgba(91, 123, 75, 0.35);
+    color: var(--green);
+    font-weight: 600;
+    text-align: center;
+  }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin: -12px 0 20px; }
+  .previous-note { font-size: 12px; color: var(--text-muted); margin: -8px 0 18px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    {% if ticket.status != "completed" %}
+      <h1>{{ t.review_not_completed_title }}</h1>
+      <p class="subtitle">{{ t.review_not_completed_body }}</p>
+    {% elif success %}
+      <h1>{{ t.review_heading.replace('{id}', ticket.id|string) }}</h1>
+      <div class="msg success">{{ success }}</div>
+    {% else %}
+      <h1>{{ t.review_heading.replace('{id}', ticket.id|string) }}</h1>
+
+      {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+      {% if ticket.client_rating %}<p class="previous-note">{{ t.review_updated_note }} {{ ticket.client_rating }}/5{% if ticket.client_review %} — «{{ ticket.client_review }}»{% endif %}</p>{% endif %}
+
+      <form method="post" action="{{ url_for('tickets.ticket_review_submit', ticket_id=ticket.id) }}">
+        <label>{{ t.review_rating_label }}</label>
+        <div class="star-rating">
+          <input type="radio" id="star5" name="rating" value="5" required {% if ticket.client_rating == 5 %}checked{% endif %}><label for="star5" title="5">★</label>
+          <input type="radio" id="star4" name="rating" value="4" required {% if ticket.client_rating == 4 %}checked{% endif %}><label for="star4" title="4">★</label>
+          <input type="radio" id="star3" name="rating" value="3" required {% if ticket.client_rating == 3 %}checked{% endif %}><label for="star3" title="3">★</label>
+          <input type="radio" id="star2" name="rating" value="2" required {% if ticket.client_rating == 2 %}checked{% endif %}><label for="star2" title="2">★</label>
+          <input type="radio" id="star1" name="rating" value="1" required {% if ticket.client_rating == 1 %}checked{% endif %}><label for="star1" title="1">★</label>
+        </div>
+
+        <label for="review">{{ t.review_text_label }}</label>
+        <textarea id="review" name="review" rows="4" placeholder="{{ t.review_text_placeholder }}">{{ ticket.client_review or "" }}</textarea>
+
+        <button type="submit">{{ t.review_submit_button }}</button>
+      </form>
+    {% endif %}
+  </div>
+</body>
+</html>
