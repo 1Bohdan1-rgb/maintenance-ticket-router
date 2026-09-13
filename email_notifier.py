@@ -2,9 +2,11 @@ import os
 import smtplib
 from email.message import EmailMessage
 
+from translations import get_translation
 
-def send_confirmation_email(ticket, technician=None):
-    """Send a ticket confirmation email to the customer.
+
+def send_confirmation_email(ticket, technician=None, lang="uk"):
+    """Send a ticket confirmation email to the customer in the given language.
 
     Raises on missing SMTP configuration or any send failure - callers are
     expected to catch and log, since a failed email must not block ticket
@@ -20,18 +22,23 @@ def send_confirmation_email(ticket, technician=None):
             "SMTP is not configured (SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD)"
         )
 
+    t = get_translation(lang)["email"]
+    ui = get_translation(lang)
+    category_name = ui["category_names"].get(ticket.category, ticket.category or "—")
+    priority_name = ui["priority_names"].get(ticket.priority, ticket.priority or "—")
+
     lines = [
-        f'Вашу заявку "{ticket.title}" прийнято в обробку.',
-        f"Категорія: {ticket.category or '—'}",
-        f"Пріоритет: {ticket.priority or '—'}",
+        t["intro"].format(title=ticket.title),
+        t["category_line"].format(category=category_name),
+        t["priority_line"].format(priority=priority_name),
     ]
     if technician:
-        lines.append(f"Призначений майстер: {technician.name}")
+        lines.append(t["assigned_line"].format(technician=technician.name))
     else:
-        lines.append("Майстра буде призначено найближчим часом.")
+        lines.append(t["pending_line"])
 
     message = EmailMessage()
-    message["Subject"] = f"Заявку №{ticket.id} прийнято: {ticket.title}"
+    message["Subject"] = t["subject"].format(id=ticket.id, title=ticket.title)
     message["From"] = smtp_user
     message["To"] = ticket.customer_email
     message.set_content("\n".join(lines))

@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, render_template, request
 from ai_classifier import classify_ticket
 from email_notifier import send_confirmation_email
 from models import STATUSES, Technician, Ticket, db
+from translations import TRANSLATIONS, DEFAULT_LANG
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ def create_ticket():
 
     description = payload.get("description")
     customer_email = payload.get("customer_email")
+    lang = payload.get("lang")
+    if lang not in TRANSLATIONS:
+        lang = DEFAULT_LANG
 
     ticket = Ticket(
         title=title,
@@ -86,7 +90,7 @@ def create_ticket():
 
     if customer_email:
         try:
-            send_confirmation_email(ticket, technician)
+            send_confirmation_email(ticket, technician, lang=lang)
         except Exception:
             logger.exception(
                 "Не вдалося надіслати email підтвердження для заявки #%s", ticket.id

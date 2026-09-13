@@ -1,10 +1,12 @@
+import json
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 
 from models import Technician, db
 from routes import bp as tickets_bp
+from translations import DEFAULT_LANG, TRANSLATIONS
 
 load_dotenv()
 
@@ -29,6 +31,15 @@ def create_app():
 
     @app.route("/")
     def index():
+        return render_template(
+            "index.html",
+            translations_json=json.dumps(TRANSLATIONS, ensure_ascii=False),
+            default_lang=DEFAULT_LANG,
+            t=TRANSLATIONS[DEFAULT_LANG],
+        )
+
+    @app.route("/health")
+    def health():
         return jsonify({"status": "ok", "service": "maintenance-ticket-router"})
 
     with app.app_context():
