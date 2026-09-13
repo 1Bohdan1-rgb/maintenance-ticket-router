@@ -42,11 +42,18 @@ SEED_TECHNICIANS = [
 ]
 
 
+def _normalized_database_url():
+    url = os.environ.get("DATABASE_URL", "sqlite:///tickets.db")
+    # Render (and some other providers) hand out "postgres://", but
+    # SQLAlchemy 1.4+/2.x only accepts the "postgresql://" scheme.
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 def create_app():
     app = Flask(__name__)
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "DATABASE_URL", "sqlite:///tickets.db"
-    )
+    app.config["SQLALCHEMY_DATABASE_URI"] = _normalized_database_url()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev")
 
