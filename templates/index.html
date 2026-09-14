@@ -479,10 +479,36 @@
               <span class="field-icon">🛠️</span>
               <select id="tech_specialty" required>
                 <option value="" data-i18n="tech_specialty_placeholder">{{ t.tech_specialty_placeholder }}</option>
-                <option value="plumbing" data-i18n-category="plumbing"></option>
-                <option value="electrical" data-i18n-category="electrical"></option>
-                <option value="carpentry" data-i18n-category="carpentry"></option>
-                <option value="general" data-i18n-category="general"></option>
+                <option value="plumbing" data-i18n-group="category_names" data-i18n-option="plumbing"></option>
+                <option value="electrical" data-i18n-group="category_names" data-i18n-option="electrical"></option>
+                <option value="carpentry" data-i18n-group="category_names" data-i18n-option="carpentry"></option>
+                <option value="general" data-i18n-group="category_names" data-i18n-option="general"></option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="tech_price_tier_label">{{ t.tech_price_tier_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">💰</span>
+              <select id="tech_price_tier">
+                <option value="" data-i18n="tech_price_tier_placeholder">{{ t.tech_price_tier_placeholder }}</option>
+                <option value="budget" data-i18n-group="price_tier_names" data-i18n-option="budget"></option>
+                <option value="mid" data-i18n-group="price_tier_names" data-i18n-option="mid"></option>
+                <option value="premium" data-i18n-group="price_tier_names" data-i18n-option="premium"></option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="tech_speed_rating_label">{{ t.tech_speed_rating_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">⚡</span>
+              <select id="tech_speed_rating">
+                <option value="" data-i18n="tech_speed_rating_placeholder">{{ t.tech_speed_rating_placeholder }}</option>
+                <option value="fast" data-i18n-group="speed_rating_names" data-i18n-option="fast"></option>
+                <option value="medium" data-i18n-group="speed_rating_names" data-i18n-option="medium"></option>
+                <option value="slow" data-i18n-group="speed_rating_names" data-i18n-option="slow"></option>
               </select>
             </div>
           </div>
@@ -532,9 +558,10 @@
       const key = el.getAttribute('data-i18n-placeholder');
       if (t[key]) el.placeholder = t[key];
     });
-    document.querySelectorAll('[data-i18n-category]').forEach((el) => {
-      const key = el.getAttribute('data-i18n-category');
-      if (t.category_names && t.category_names[key]) el.textContent = t.category_names[key];
+    document.querySelectorAll('[data-i18n-option]').forEach((el) => {
+      const group = el.getAttribute('data-i18n-group');
+      const key = el.getAttribute('data-i18n-option');
+      if (t[group] && t[group][key]) el.textContent = t[group][key];
     });
     document.querySelectorAll('.lang-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.lang === lang);
@@ -706,6 +733,8 @@
     const email = document.getElementById('tech_email').value.trim();
     const phone = document.getElementById('tech_phone').value.trim();
     const specialty = document.getElementById('tech_specialty').value;
+    const priceTier = document.getElementById('tech_price_tier').value;
+    const speedRating = document.getElementById('tech_speed_rating').value;
 
     techErrorEl.classList.add('hidden');
     techResult.classList.add('hidden');
@@ -723,7 +752,15 @@
       const response = await fetch('/technicians', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: JSON.stringify({ name, email, phone, specialty, lang: currentLang }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          specialty,
+          price_tier: priceTier || undefined,
+          speed_rating: speedRating || undefined,
+          lang: currentLang,
+        }),
       });
 
       const data = await response.json().catch(() => ({}));

@@ -8,6 +8,8 @@ SPECIALTIES = ("plumbing", "electrical", "carpentry", "general")
 CATEGORIES = ("plumbing", "electrical", "carpentry", "general", "other")
 PRIORITIES = ("low", "medium", "high", "emergency")
 STATUSES = ("new", "pending_assignment", "assigned", "confirmed", "completed", "in_progress", "resolved", "closed")
+PRICE_TIERS = ("budget", "mid", "premium")
+SPEED_RATINGS = ("fast", "medium", "slow")
 
 
 def _utcnow():
@@ -25,6 +27,8 @@ class Technician(db.Model):
     phone = db.Column(db.String(30), nullable=True)
     resume_summary = db.Column(db.Text, nullable=True)
     resume_uploaded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    price_tier = db.Column(db.String(20), nullable=True)
+    speed_rating = db.Column(db.String(20), nullable=True)
 
     tickets = db.relationship("Ticket", back_populates="assignee")
 
@@ -34,6 +38,8 @@ class Technician(db.Model):
             "name": self.name,
             "specialty": self.specialty,
             "available": self.available,
+            "price_tier": self.price_tier,
+            "speed_rating": self.speed_rating,
         }
 
 

@@ -9,7 +9,7 @@ from email_notifier import (
     send_confirmation_email,
     send_technician_notification,
 )
-from models import SPECIALTIES, STATUSES, Technician, Ticket, db
+from models import PRICE_TIERS, SPECIALTIES, SPEED_RATINGS, STATUSES, Technician, Ticket, db
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
 from technician_assignment import select_technician
 from translations import TRANSLATIONS, DEFAULT_LANG
@@ -150,6 +150,8 @@ def register_technician():
     email = (payload.get("email") or "").strip()
     phone = (payload.get("phone") or "").strip()
     specialty = payload.get("specialty")
+    price_tier = (payload.get("price_tier") or "").strip() or None
+    speed_rating = (payload.get("speed_rating") or "").strip() or None
     lang = payload.get("lang")
     if lang not in TRANSLATIONS:
         lang = DEFAULT_LANG
@@ -157,6 +159,12 @@ def register_technician():
 
     if not name or not email or not phone or specialty not in SPECIALTIES:
         return jsonify({"error": t["tech_error_required"]}), 400
+
+    if price_tier is not None and price_tier not in PRICE_TIERS:
+        return jsonify({"error": t["tech_error_invalid_option"]}), 400
+
+    if speed_rating is not None and speed_rating not in SPEED_RATINGS:
+        return jsonify({"error": t["tech_error_invalid_option"]}), 400
 
     if _find_technician_by_email(email) is not None:
         return jsonify({"error": t["tech_error_email_exists"]}), 409
@@ -166,6 +174,8 @@ def register_technician():
         email=email,
         phone=phone,
         specialty=specialty,
+        price_tier=price_tier,
+        speed_rating=speed_rating,
         available=True,
     )
     db.session.add(technician)
