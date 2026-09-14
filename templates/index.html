@@ -413,6 +413,18 @@
             </div>
           </div>
 
+          <div class="field">
+            <label class="field-label" data-i18n="match_priority_label">{{ t.match_priority_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">🎯</span>
+              <select id="match_priority">
+                <option value="quality" data-i18n-group="match_priority_names" data-i18n-option="quality"></option>
+                <option value="speed" data-i18n-group="match_priority_names" data-i18n-option="speed"></option>
+                <option value="price" data-i18n-group="match_priority_names" data-i18n-option="price"></option>
+              </select>
+            </div>
+          </div>
+
           <p id="form-error" class="form-error hidden"></p>
 
           <button type="submit" class="submit-btn" id="submit-btn" data-i18n="submit_button">{{ t.submit_button }}</button>
@@ -657,6 +669,7 @@
     const description = document.getElementById('description').value.trim();
     const email = document.getElementById('customer_email').value.trim();
     const phone = document.getElementById('customer_phone').value.trim();
+    const matchPriority = document.getElementById('match_priority').value;
 
     errorEl.classList.add('hidden');
 
@@ -686,6 +699,7 @@
           description: description,
           customer_email: email || undefined,
           customer_phone: phone || undefined,
+          match_priority: matchPriority,
           lang: currentLang,
         }),
       });

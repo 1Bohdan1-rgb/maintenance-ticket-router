@@ -67,6 +67,36 @@ def _technician_stats(technician_id, category):
     return {"avg_rating": avg_rating, "completed_count": len(tickets), "based_on": based_on}
 
 
+def _filter_by_match_priority(candidates, match_priority):
+    """Narrow candidates to the tier that best matches the client's chosen
+    match_priority ("speed" or "price"; "quality" leaves the list as-is).
+
+    Ranks candidates into three tiers - best match, neutral, worst match -
+    and returns the best non-empty tier, so the rest of the pipeline (rating
+    stats, resume-based Claude selection) still runs among a group that
+    already satisfies the client's preference as well as possible. A
+    technician with the field unset (None) is treated as neutral, not
+    excluded, same as the explicit middle value - this can never return an
+    empty list since every candidate falls into exactly one tier.
+    """
+    if match_priority == "price":
+        field, best, worst = "price_tier", "budget", "premium"
+    elif match_priority == "speed":
+        field, best, worst = "speed_rating", "fast", "slow"
+    else:
+        return candidates
+
+    tiers = [
+        [c for c in candidates if getattr(c, field) == best],
+        [c for c in candidates if getattr(c, field) not in (best, worst)],
+        [c for c in candidates if getattr(c, field) == worst],
+    ]
+    for tier in tiers:
+        if tier:
+            return tier
+    return candidates
+
+
 def _pick_best_by_rating(candidates, stats_by_id):
     def sort_key(technician):
         stats = stats_by_id[technician.id]
@@ -151,12 +181,20 @@ def _select_with_claude(ticket, candidates, stats_by_id):
     return chosen, reasoning
 
 
-def select_technician(ticket):
+def select_technician(ticket, match_priority="quality"):
     """Pick the best available technician for `ticket`.
+
+    `match_priority` is the client's stated preference - "quality" (default),
+    "speed", or "price". For "speed"/"price" the candidate pool is first
+    narrowed to whichever tier best matches that preference (see
+    _filter_by_match_priority) before the existing resume/rating-based
+    selection runs on what's left; "quality" leaves candidate selection
+    exactly as before.
 
     Returns (technician_or_None, reasoning_or_None):
     - No matching/available technician: (None, None).
-    - Exactly one candidate: assigned directly, no AI call, (technician, None).
+    - Exactly one candidate (before or after match_priority narrowing):
+      assigned directly, no AI call, (technician, None).
     - Candidates exist but none has a resume_summary: falls back to the
       highest-rated candidate, no AI call, (technician, None).
     - Otherwise Claude picks among the candidates using their resume
@@ -168,6 +206,11 @@ def select_technician(ticket):
 
     if not candidates:
         return None, None
+
+    if len(candidates) == 1:
+        return candidates[0], None
+
+    candidates = _filter_by_match_priority(candidates, match_priority)
 
     if len(candidates) == 1:
         return candidates[0], None

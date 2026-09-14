@@ -9,7 +9,7 @@ from email_notifier import (
     send_confirmation_email,
     send_technician_notification,
 )
-from models import PRICE_TIERS, SPECIALTIES, SPEED_RATINGS, STATUSES, Technician, Ticket, db
+from models import MATCH_PRIORITIES, PRICE_TIERS, SPECIALTIES, SPEED_RATINGS, STATUSES, Technician, Ticket, db
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
 from technician_assignment import select_technician
 from translations import TRANSLATIONS, DEFAULT_LANG
@@ -66,6 +66,9 @@ def create_ticket():
     description = payload.get("description")
     customer_email = (payload.get("customer_email") or "").strip() or None
     customer_phone = (payload.get("customer_phone") or "").strip() or None
+    match_priority = payload.get("match_priority")
+    if match_priority not in MATCH_PRIORITIES:
+        match_priority = "quality"
     lang = payload.get("lang")
     if lang not in TRANSLATIONS:
         lang = DEFAULT_LANG
@@ -89,7 +92,7 @@ def create_ticket():
     ticket.priority = classification["priority"]
     ticket.urgency_reason = classification["urgency_reason"]
 
-    technician, reasoning = select_technician(ticket)
+    technician, reasoning = select_technician(ticket, match_priority=match_priority)
 
     if technician:
         ticket.assigned_to = technician.id

@@ -10,6 +10,7 @@ PRIORITIES = ("low", "medium", "high", "emergency")
 STATUSES = ("new", "pending_assignment", "assigned", "confirmed", "completed", "in_progress", "resolved", "closed")
 PRICE_TIERS = ("budget", "mid", "premium")
 SPEED_RATINGS = ("fast", "medium", "slow")
+MATCH_PRIORITIES = ("quality", "speed", "price")
 
 
 def _utcnow():
