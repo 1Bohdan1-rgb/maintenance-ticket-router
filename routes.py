@@ -9,7 +9,7 @@ from email_notifier import (
     send_confirmation_email,
     send_technician_notification,
 )
-from models import STATUSES, Technician, Ticket, db
+from models import SPECIALTIES, STATUSES, Technician, Ticket, db
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
 from technician_assignment import select_technician
 from translations import TRANSLATIONS, DEFAULT_LANG
@@ -140,6 +140,38 @@ def _find_technician_by_email(email):
     if not email:
         return None
     return Technician.query.filter(db.func.lower(Technician.email) == email.strip().lower()).first()
+
+
+@bp.route("/technicians", methods=["POST"])
+def register_technician():
+    payload = request.get_json(silent=True) or {}
+
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip()
+    phone = (payload.get("phone") or "").strip()
+    specialty = payload.get("specialty")
+    lang = payload.get("lang")
+    if lang not in TRANSLATIONS:
+        lang = DEFAULT_LANG
+    t = TRANSLATIONS[lang]
+
+    if not name or not email or not phone or specialty not in SPECIALTIES:
+        return jsonify({"error": t["tech_error_required"]}), 400
+
+    if _find_technician_by_email(email) is not None:
+        return jsonify({"error": t["tech_error_email_exists"]}), 409
+
+    technician = Technician(
+        name=name,
+        email=email,
+        phone=phone,
+        specialty=specialty,
+        available=True,
+    )
+    db.session.add(technician)
+    db.session.commit()
+
+    return jsonify(technician.to_dict()), 201
 
 
 @bp.route("/technician/upload", methods=["GET"])
