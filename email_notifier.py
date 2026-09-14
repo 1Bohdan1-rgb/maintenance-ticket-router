@@ -112,7 +112,7 @@ def send_technician_notification(ticket, technician):
     ui = get_translation("uk")
     category_name = ui["category_names"].get(ticket.category, ticket.category or "—")
     priority_name = ui["priority_names"].get(ticket.priority, ticket.priority or "—")
-    customer_contact = ticket.customer_email or "клієнт не залишив контакт"
+    customer_contact = ticket.customer_email or ticket.customer_phone or "клієнт не залишив контакт"
 
     lines = [
         f"Опис проблеми: {ticket.description or '—'}",

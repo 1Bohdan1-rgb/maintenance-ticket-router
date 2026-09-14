@@ -159,7 +159,7 @@
     pointer-events: none;
     opacity: 0.85;
   }
-  textarea, input[type="email"] {
+  textarea, input[type="email"], input[type="tel"] {
     width: 100%;
     background: var(--field-bg);
     border: 1px solid var(--field-border);
@@ -177,7 +177,8 @@
     border-color: var(--field-border-focus);
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
-  input[type="email"] { padding-top: 12px; padding-bottom: 12px; }
+  input[type="email"], input[type="tel"] { padding-top: 12px; padding-bottom: 12px; }
+  .field-icon-wrap + .field-icon-wrap { margin-top: 10px; }
   .submit-btn {
     width: 100%;
     background: var(--accent);
@@ -357,10 +358,14 @@
           </div>
 
           <div class="field">
-            <label class="field-label" data-i18n="email_label">{{ t.email_label }}</label>
+            <label class="field-label" data-i18n="contact_label">{{ t.contact_label }}</label>
             <div class="field-icon-wrap">
               <span class="field-icon">✉️</span>
               <input type="email" id="customer_email" data-i18n-placeholder="email_placeholder" placeholder="{{ t.email_placeholder }}">
+            </div>
+            <div class="field-icon-wrap">
+              <span class="field-icon">📞</span>
+              <input type="tel" id="customer_phone" data-i18n-placeholder="phone_placeholder" placeholder="{{ t.phone_placeholder }}">
             </div>
           </div>
 
@@ -523,11 +528,18 @@
     const t = TRANSLATIONS[currentLang];
     const description = document.getElementById('description').value.trim();
     const email = document.getElementById('customer_email').value.trim();
+    const phone = document.getElementById('customer_phone').value.trim();
 
     errorEl.classList.add('hidden');
 
     if (!description) {
       errorEl.textContent = t.error_required;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    if (!email && !phone) {
+      errorEl.textContent = t.error_contact_required;
       errorEl.classList.remove('hidden');
       return;
     }
@@ -545,6 +557,7 @@
           title: title,
           description: description,
           customer_email: email || undefined,
+          customer_phone: phone || undefined,
           lang: currentLang,
         }),
       });

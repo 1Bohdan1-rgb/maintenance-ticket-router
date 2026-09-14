@@ -64,16 +64,21 @@ def create_ticket():
         return jsonify({"error": "'title' is required"}), 400
 
     description = payload.get("description")
-    customer_email = payload.get("customer_email")
+    customer_email = (payload.get("customer_email") or "").strip() or None
+    customer_phone = (payload.get("customer_phone") or "").strip() or None
     lang = payload.get("lang")
     if lang not in TRANSLATIONS:
         lang = DEFAULT_LANG
+
+    if not customer_email and not customer_phone:
+        return jsonify({"error": TRANSLATIONS[lang]["error_contact_required"]}), 400
 
     ticket = Ticket(
         title=title,
         description=description,
         status="new",
         customer_email=customer_email,
+        customer_phone=customer_phone,
         lang=lang,
     )
     db.session.add(ticket)

@@ -47,6 +47,7 @@ class Ticket(db.Model):
     priority = db.Column(db.String(20), nullable=True)
     status = db.Column(db.String(20), nullable=False, default="new")
     customer_email = db.Column(db.String(255), nullable=True)
+    customer_phone = db.Column(db.String(30), nullable=True)
     urgency_reason = db.Column(db.Text, nullable=True)
     lang = db.Column(db.String(5), nullable=True, default="uk")
     assigned_to = db.Column(db.Integer, db.ForeignKey("technicians.id"), nullable=True)
@@ -68,6 +69,7 @@ class Ticket(db.Model):
             "priority": self.priority,
             "status": self.status,
             "customer_email": self.customer_email,
+            "customer_phone": self.customer_phone,
             "urgency_reason": self.urgency_reason,
             "assigned_to": self.assigned_to,
             "created_at": self.created_at.isoformat() if self.created_at else None,
