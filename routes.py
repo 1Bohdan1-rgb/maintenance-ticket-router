@@ -222,6 +222,21 @@ def confirm_ticket(ticket_id):
     return jsonify(ticket.to_dict(include_assignee=True))
 
 
+@bp.route("/tickets/<int:ticket_id>", methods=["DELETE"])
+def delete_ticket(ticket_id):
+    """Remove a ticket (e.g. test/junk data) and its assignment rows -
+    Ticket.assignments cascades on delete, so no manual cleanup needed.
+    """
+    ticket = Ticket.query.get(ticket_id)
+    if ticket is None:
+        return jsonify({"error": "ticket not found"}), 404
+
+    db.session.delete(ticket)
+    db.session.commit()
+
+    return "", 204
+
+
 @bp.route("/admin/reassign-pending", methods=["POST"])
 def reassign_pending():
     """Retry technician matching for ticket_assignments rows still missing
