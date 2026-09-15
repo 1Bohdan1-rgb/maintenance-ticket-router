@@ -27,7 +27,7 @@ from models import (
     db,
 )
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
-from technician_assignment import select_technician_team
+from technician_assignment import select_technician, select_technician_team
 from translations import TRANSLATIONS, DEFAULT_LANG
 
 logger = logging.getLogger(__name__)
@@ -220,6 +220,52 @@ def confirm_ticket(ticket_id):
         db.session.commit()
 
     return jsonify(ticket.to_dict(include_assignee=True))
+
+
+@bp.route("/admin/reassign-pending", methods=["POST"])
+def reassign_pending():
+    """Retry technician matching for ticket_assignments rows still missing
+    a technician.
+
+    Assignment only ever runs once, at ticket creation - if no technician
+    was available/registered for a specialty yet at that moment, the gap
+    (e.g. "carpentry: -") stays forever, even after a matching technician
+    later becomes available. This re-runs select_technician() for each open
+    gap and fills in whatever now matches, catching up tickets that were
+    confirmed - and whose technician therefore never got notified - before
+    the gap was fixed.
+    """
+    open_assignments = TicketAssignment.query.filter(TicketAssignment.technician_id.is_(None)).all()
+
+    reassigned = []
+    for assignment in open_assignments:
+        ticket = assignment.ticket
+        technician, reasoning = select_technician(ticket, specialty=assignment.specialty)
+        if technician is None:
+            continue
+
+        assignment.technician_id = technician.id
+        assignment.reasoning = reasoning
+
+        if ticket.assignments and ticket.assignments[0].id == assignment.id and ticket.assigned_to is None:
+            ticket.assigned_to = technician.id
+            ticket.assignment_reasoning = reasoning
+
+        if ticket.status == "pending_assignment":
+            ticket.status = "assigned"
+        elif ticket.status in ("confirmed", "completed", "in_progress", "resolved", "closed"):
+            try:
+                send_technician_notification(ticket, technician)
+            except Exception:
+                logger.exception(
+                    "Не вдалося надіслати email майстру %s для заявки #%s", technician.id, ticket.id
+                )
+
+        reassigned.append({"ticket_id": ticket.id, "specialty": assignment.specialty, "technician": technician.name})
+
+    db.session.commit()
+
+    return jsonify({"reassigned": reassigned, "remaining_gaps": len(open_assignments) - len(reassigned)})
 
 
 def _find_technician_by_email(email):
