@@ -13,6 +13,7 @@ MODEL = "claude-sonnet-4-6"
 
 FALLBACK_RESULT = {
     "category": "general",
+    "categories": ["general"],
     "priority": "medium",
     "urgency_reason": "Не вдалося класифікувати автоматично, застосовано значення за замовчуванням.",
 }
@@ -23,10 +24,20 @@ Given the description of a maintenance issue, classify it.
 Respond with STRICT JSON only. No markdown, no code fences, no explanation
 before or after the JSON. Respond with exactly one JSON object of this shape:
 
-{"category": "plumbing|electrical|carpentry|general", "priority": "low|medium|high|emergency", "urgency_reason": "one short sentence"}
+{"categories": ["plumbing|electrical|carpentry|general", "..."], "priority": "low|medium|high|emergency", "urgency_reason": "one short sentence"}
 
 Rules:
-- "category" must be exactly one of: plumbing, electrical, carpentry, general.
+- "categories" is a JSON array of one or more values, each exactly one of:
+  plumbing, electrical, carpentry, general.
+- Almost every request needs exactly one category - use a single-element
+  array by default. Only include more than one category when the
+  description clearly and explicitly requires multiple distinct trades to
+  work on genuinely separate parts of the problem - e.g. "the ceiling
+  collapsed, exposing wiring and a burst pipe" needs carpentry, electrical,
+  AND plumbing. Do not split an ordinary single-trade job into multiple
+  categories just because it touches more than one fixture.
+- List "categories" in order of how urgent/primary each trade is to the
+  described problem.
 - "priority" must be exactly one of: low, medium, high, emergency. Use "emergency"
   only when the issue poses an immediate safety or property risk (e.g. gas leak,
   active flooding, exposed live wiring, fire hazard).
@@ -50,9 +61,13 @@ def _extract_json(text: str) -> dict:
 def classify_ticket(description: str) -> dict:
     """Classify a maintenance ticket description via Claude.
 
-    Always returns a dict with "category", "priority", and "urgency_reason".
-    Falls back to category="general", priority="medium" on any failure
-    (missing API key, network/API error, or an unparsable/invalid response).
+    Always returns a dict with "category" (str), "categories" (list of str,
+    always at least one element), "priority", and "urgency_reason".
+    "category" is always categories[0] - kept for callers that only need a
+    single value, so behavior is unchanged whenever Claude (or the fallback)
+    returns exactly one category. Falls back to categories=["general"],
+    priority="medium" on any failure (missing API key, network/API error, or
+    an unparsable/invalid response).
     """
     if not description or not description.strip():
         return dict(FALLBACK_RESULT)
@@ -98,16 +113,23 @@ def classify_ticket(description: str) -> dict:
         logger.warning("Could not parse Claude response as JSON: %r", text)
         return dict(FALLBACK_RESULT)
 
-    category = result.get("category")
+    categories_raw = result.get("categories")
     priority = result.get("priority")
     urgency_reason = result.get("urgency_reason") or ""
 
-    if category not in CATEGORIES or priority not in PRIORITIES:
-        logger.warning("Claude returned an invalid category/priority: %r", result)
+    categories = []
+    if isinstance(categories_raw, list):
+        for c in categories_raw:
+            if c in CATEGORIES and c not in categories:
+                categories.append(c)
+
+    if not categories or priority not in PRIORITIES:
+        logger.warning("Claude returned invalid categories/priority: %r", result)
         return dict(FALLBACK_RESULT)
 
     return {
-        "category": category,
+        "category": categories[0],
+        "categories": categories,
         "priority": priority,
         "urgency_reason": urgency_reason,
     }

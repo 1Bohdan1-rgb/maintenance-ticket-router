@@ -155,6 +155,12 @@
               {% if ticket.priority %}<span class="pill badge-{{ ticket.priority }}">{{ ticket.priority }}</span>{% endif %}
             </div>
             <div class="ticket-meta">{{ ticket.description or "—" }}</div>
+            {% if ticket.assignments|length > 1 %}
+            <div class="ticket-meta">
+              Команда:
+              {% for a in ticket.assignments %}{{ a.specialty }}: {{ a.technician.name if a.technician else "—" }}{% if not loop.last %}, {% endif %}{% endfor %}
+            </div>
+            {% endif %}
 
             {% if ticket.status == "completed" %}
               <span class="status-tag status-completed">✓ Завершено {{ ticket.completed_at.strftime('%Y-%m-%d %H:%M') if ticket.completed_at else "" }} UTC</span>

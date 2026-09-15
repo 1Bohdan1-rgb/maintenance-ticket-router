@@ -230,8 +230,12 @@
           {% endif %}
         </div>
         <div class="completed-meta">
-          {{ ticket.category or "—" }} · {{ ticket.assignee.name if ticket.assignee else "—" }} ·
-          завершено {{ ticket.completed_at.strftime('%Y-%m-%d %H:%M') if ticket.completed_at else "—" }} UTC
+          {% if ticket.assignments %}
+            {% for a in ticket.assignments %}{{ a.specialty }}: {{ a.technician.name if a.technician else "—" }}{% if not loop.last %}, {% endif %}{% endfor %}
+          {% else %}
+            {{ ticket.category or "—" }} · {{ ticket.assignee.name if ticket.assignee else "—" }}
+          {% endif %}
+          · завершено {{ ticket.completed_at.strftime('%Y-%m-%d %H:%M') if ticket.completed_at else "—" }} UTC
         </div>
         {% if ticket.client_review %}
         <div class="completed-review">«{{ ticket.client_review }}»</div>
@@ -272,7 +276,15 @@
             {% endif %}
           </td>
           <td>{{ t.status }}</td>
-          <td{% if t.assignment_reasoning %} title="{{ t.assignment_reasoning }}"{% endif %}>{{ t.assignee.name if t.assignee else "—" }}</td>
+          <td>
+            {% if t.assignments %}
+              {% for a in t.assignments %}
+              <div{% if a.reasoning %} title="{{ a.reasoning }}"{% endif %}>{{ a.specialty }}: {{ a.technician.name if a.technician else "—" }}</div>
+              {% endfor %}
+            {% else %}
+              {{ t.assignee.name if t.assignee else "—" }}
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

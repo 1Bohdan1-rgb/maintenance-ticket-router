@@ -9,9 +9,19 @@ from email_notifier import (
     send_confirmation_email,
     send_technician_notification,
 )
-from models import MATCH_PRIORITIES, PRICE_TIERS, SPECIALTIES, SPEED_RATINGS, STATUSES, Technician, Ticket, db
+from models import (
+    MATCH_PRIORITIES,
+    PRICE_TIERS,
+    SPECIALTIES,
+    SPEED_RATINGS,
+    STATUSES,
+    Technician,
+    Ticket,
+    TicketAssignment,
+    db,
+)
 from resume_processor import ResumeProcessingError, allowed_filename, extract_text, generate_summary
-from technician_assignment import select_technician
+from technician_assignment import select_technician_team
 from translations import TRANSLATIONS, DEFAULT_LANG
 
 logger = logging.getLogger(__name__)
@@ -88,26 +98,38 @@ def create_ticket():
     db.session.commit()
 
     classification = classify_ticket(description or "")
+    categories = classification["categories"]
     ticket.category = classification["category"]
     ticket.priority = classification["priority"]
     ticket.urgency_reason = classification["urgency_reason"]
 
-    technician, reasoning = select_technician(ticket, match_priority=match_priority)
+    team = select_technician_team(ticket, categories, match_priority=match_priority)
+    primary_specialty, primary_technician, primary_reasoning = team[0]
 
-    if technician:
-        ticket.assigned_to = technician.id
-        ticket.assignment_reasoning = reasoning
-        ticket.status = "assigned"
+    if primary_technician:
+        ticket.assigned_to = primary_technician.id
+        ticket.assignment_reasoning = primary_reasoning
     else:
         ticket.assigned_to = None
         ticket.assignment_reasoning = None
-        ticket.status = "pending_assignment"
+
+    ticket.status = "assigned" if any(tech for _, tech, _ in team) else "pending_assignment"
+
+    for specialty, technician, reasoning in team:
+        db.session.add(
+            TicketAssignment(
+                ticket_id=ticket.id,
+                technician_id=technician.id if technician else None,
+                specialty=specialty,
+                reasoning=reasoning,
+            )
+        )
 
     db.session.commit()
 
     if customer_email:
         try:
-            send_confirmation_email(ticket, technician, lang=lang)
+            send_confirmation_email(ticket, primary_technician, lang=lang)
         except Exception:
             logger.exception(
                 "Не вдалося надіслати email підтвердження для заявки #%s", ticket.id
@@ -125,13 +147,23 @@ def confirm_ticket(ticket_id):
         return jsonify({"error": "ticket not found"}), 404
 
     if ticket.status != "confirmed":
-        technician = ticket.assignee
-        if technician:
+        technicians = []
+        seen_ids = set()
+        for assignment in ticket.assignments:
+            if assignment.technician and assignment.technician.id not in seen_ids:
+                technicians.append(assignment.technician)
+                seen_ids.add(assignment.technician.id)
+        if not technicians and ticket.assignee:
+            # Legacy tickets created before ticket_assignments existed have
+            # no assignment rows - fall back to the single legacy field.
+            technicians = [ticket.assignee]
+
+        for technician in technicians:
             try:
                 send_technician_notification(ticket, technician)
             except Exception:
                 logger.exception(
-                    "Не вдалося надіслати email майстру для заявки #%s", ticket.id
+                    "Не вдалося надіслати email майстру %s для заявки #%s", technician.id, ticket.id
                 )
         ticket.status = "confirmed"
         db.session.commit()
@@ -242,8 +274,13 @@ def technician_upload_submit():
 
 
 def _technician_tickets(technician):
+    assigned_ticket_ids = db.session.query(TicketAssignment.ticket_id).filter(
+        TicketAssignment.technician_id == technician.id
+    )
     return (
-        Ticket.query.filter_by(assigned_to=technician.id)
+        Ticket.query.filter(
+            db.or_(Ticket.assigned_to == technician.id, Ticket.id.in_(assigned_ticket_ids))
+        )
         .order_by(Ticket.created_at.desc())
         .limit(20)
         .all()
@@ -269,6 +306,12 @@ def technician_dashboard_view():
     )
 
 
+def _ticket_has_technician(ticket, technician):
+    if ticket.assigned_to == technician.id:
+        return True
+    return any(a.technician_id == technician.id for a in ticket.assignments)
+
+
 @bp.route("/technician/tickets/<int:ticket_id>/complete", methods=["POST"])
 def technician_complete_ticket(ticket_id):
     email = (request.form.get("email") or "").strip()
@@ -278,7 +321,7 @@ def technician_complete_ticket(ticket_id):
 
     if technician is None:
         error = "Майстра з таким email не знайдено."
-    elif ticket is None or ticket.assigned_to != technician.id:
+    elif ticket is None or not _ticket_has_technician(ticket, technician):
         error = "Заявку не знайдено або вона не призначена вам."
     elif ticket.status != "completed":
         ticket.status = "completed"

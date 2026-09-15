@@ -66,6 +66,12 @@ class Ticket(db.Model):
     assignment_reasoning = db.Column(db.Text, nullable=True)
 
     assignee = db.relationship("Technician", back_populates="tickets")
+    assignments = db.relationship(
+        "TicketAssignment",
+        back_populates="ticket",
+        order_by="TicketAssignment.id",
+        cascade="all, delete-orphan",
+    )
 
     def to_dict(self, include_assignee=False):
         data = {
@@ -88,4 +94,35 @@ class Ticket(db.Model):
         }
         if include_assignee:
             data["assignee"] = self.assignee.to_dict() if self.assignee else None
+            data["assignments"] = [a.to_dict() for a in self.assignments]
         return data
+
+
+class TicketAssignment(db.Model):
+    """One technician assigned to a ticket for one required specialty.
+
+    A single-specialty ticket gets exactly one row here (mirroring
+    Ticket.assigned_to/assignment_reasoning, kept in sync with the first
+    entry for backward compatibility). A multi-discipline ticket
+    ("the ceiling collapsed" -> carpentry + electrical + plumbing) gets one
+    row per specialty, each independently matched. `technician_id` is NULL
+    when no available technician could be found for that specialty.
+    """
+
+    __tablename__ = "ticket_assignments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id"), nullable=False)
+    technician_id = db.Column(db.Integer, db.ForeignKey("technicians.id"), nullable=True)
+    specialty = db.Column(db.String(50), nullable=False)
+    reasoning = db.Column(db.Text, nullable=True)
+
+    ticket = db.relationship("Ticket", back_populates="assignments")
+    technician = db.relationship("Technician")
+
+    def to_dict(self):
+        return {
+            "specialty": self.specialty,
+            "technician": self.technician.to_dict() if self.technician else None,
+            "reasoning": self.reasoning,
+        }

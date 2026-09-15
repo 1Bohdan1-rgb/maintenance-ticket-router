@@ -39,6 +39,28 @@ Rules:
 """
 
 
+def select_technician_team(ticket, categories, match_priority="quality"):
+    """Pick one technician per required specialty for a (possibly
+    multi-discipline) ticket.
+
+    `categories` is the ordered, deduplicated list of specialties the
+    ticket needs (from classify_ticket's "categories"). Each specialty is
+    matched independently via select_technician(), reusing the exact same
+    resume/rating/match_priority logic per specialty - no cross-specialty
+    interaction is needed since a technician only ever has one specialty,
+    so the same technician can never be picked twice across categories.
+
+    Returns a list of (specialty, technician_or_None, reasoning_or_None)
+    tuples, one per category, in the given order. For an ordinary
+    single-category ticket this is a one-element list, identical in
+    content to calling select_technician() directly.
+    """
+    return [
+        (specialty,) + select_technician(ticket, match_priority=match_priority, specialty=specialty)
+        for specialty in categories
+    ]
+
+
 def _technician_stats(technician_id, category):
     """Average client_rating and completed-ticket count for a technician.
 
@@ -122,7 +144,7 @@ def _format_candidate(candidate, stats):
     )
 
 
-def _select_with_claude(ticket, candidates, stats_by_id):
+def _select_with_claude(ticket, candidates, stats_by_id, specialty):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         logger.warning(
@@ -135,7 +157,7 @@ def _select_with_claude(ticket, candidates, stats_by_id):
         f"Нова заявка:\n"
         f"Заголовок: {ticket.title}\n"
         f"Опис: {ticket.description or '—'}\n"
-        f"Категорія: {ticket.category}\n"
+        f"Потрібна спеціальність для цього призначення: {specialty}\n"
         f"Пріоритет: {ticket.priority or '—'}\n\n"
         f"Кандидати:\n\n{candidates_block}"
     )
@@ -181,8 +203,12 @@ def _select_with_claude(ticket, candidates, stats_by_id):
     return chosen, reasoning
 
 
-def select_technician(ticket, match_priority="quality"):
-    """Pick the best available technician for `ticket`.
+def select_technician(ticket, match_priority="quality", specialty=None):
+    """Pick the best available technician for `ticket` in one specialty.
+
+    `specialty` defaults to `ticket.category` (the ticket's primary/only
+    specialty) - pass it explicitly to match a specific discipline on a
+    multi-discipline ticket (see select_technician_team).
 
     `match_priority` is the client's stated preference - "quality" (default),
     "speed", or "price". For "speed"/"price" the candidate pool is first
@@ -202,7 +228,8 @@ def select_technician(ticket, match_priority="quality"):
       call fails or returns something unusable, falls back to the
       highest-rated candidate, (technician, None).
     """
-    candidates = Technician.query.filter_by(specialty=ticket.category, available=True).all()
+    specialty = specialty or ticket.category
+    candidates = Technician.query.filter_by(specialty=specialty, available=True).all()
 
     if not candidates:
         return None, None
@@ -215,9 +242,9 @@ def select_technician(ticket, match_priority="quality"):
     if len(candidates) == 1:
         return candidates[0], None
 
-    stats_by_id = {c.id: _technician_stats(c.id, ticket.category) for c in candidates}
+    stats_by_id = {c.id: _technician_stats(c.id, specialty) for c in candidates}
 
     if not any(c.resume_summary for c in candidates):
         return _pick_best_by_rating(candidates, stats_by_id), None
 
-    return _select_with_claude(ticket, candidates, stats_by_id)
+    return _select_with_claude(ticket, candidates, stats_by_id, specialty)

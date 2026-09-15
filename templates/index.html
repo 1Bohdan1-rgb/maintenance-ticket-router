@@ -282,6 +282,20 @@
     color: var(--text-muted);
     margin-bottom: 4px;
   }
+  .result-team {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--field-border);
+  }
+  .result-team-label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .result-team .result-row { padding: 6px 0; }
   .pill {
     display: inline-block;
     padding: 4px 12px;
@@ -451,6 +465,11 @@
             <span id="result-reason-value"></span>
           </div>
 
+          <div class="result-team hidden" id="result-team">
+            <span class="result-team-label" id="result-team-label"></span>
+            <div id="result-team-list"></div>
+          </div>
+
           <button type="button" class="confirm-btn" id="confirm-btn" data-i18n="confirm_button"></button>
           <p class="confirm-success hidden" id="confirm-success" data-i18n="confirm_success"></p>
           <p class="confirm-error hidden" id="confirm-error"></p>
@@ -608,6 +627,32 @@
       document.getElementById('result-reason-value').textContent = data.urgency_reason;
     } else {
       reasonRow.classList.add('hidden');
+    }
+
+    const teamRow = document.getElementById('result-team');
+    const assignments = data.assignments || [];
+    if (assignments.length > 1) {
+      document.getElementById('result-team-label').textContent = t.team_label;
+      const listEl = document.getElementById('result-team-list');
+      listEl.textContent = '';
+      assignments.forEach((a) => {
+        const catName = (t.category_names && t.category_names[a.specialty]) || a.specialty;
+        const techName = a.technician ? a.technician.name : t.unassigned_text;
+        const row = document.createElement('div');
+        row.className = 'result-row';
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'label';
+        labelSpan.textContent = catName;
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'value';
+        valueSpan.textContent = techName;
+        row.appendChild(labelSpan);
+        row.appendChild(valueSpan);
+        listEl.appendChild(row);
+      });
+      teamRow.classList.remove('hidden');
+    } else {
+      teamRow.classList.add('hidden');
     }
 
     const confirmBtn = document.getElementById('confirm-btn');
