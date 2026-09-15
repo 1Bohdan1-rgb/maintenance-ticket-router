@@ -321,6 +321,27 @@ def register_technician():
     return jsonify(technician.to_dict()), 201
 
 
+@bp.route("/technicians/<int:technician_id>/availability", methods=["PATCH"])
+def set_technician_availability(technician_id):
+    """Toggle a technician in/out of the assignment pool without deleting
+    them (e.g. taking test/seed data back out of live routing, or a
+    technician going on leave) - there's no technician-delete endpoint, so
+    this is the only way to stop one from being matched to new tickets.
+    """
+    technician = Technician.query.get(technician_id)
+    if technician is None:
+        return jsonify({"error": "technician not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    if "available" not in payload or not isinstance(payload["available"], bool):
+        return jsonify({"error": "'available' (boolean) is required"}), 400
+
+    technician.available = payload["available"]
+    db.session.commit()
+
+    return jsonify(technician.to_dict())
+
+
 @bp.route("/technician/upload", methods=["GET"])
 def technician_upload_form():
     email = (request.args.get("email") or "").strip()
