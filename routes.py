@@ -14,6 +14,7 @@ from email_notifier import (
 )
 from models import (
     ALLOWED_PHOTO_TYPES,
+    GENDERS,
     MATCH_PRIORITIES,
     MAX_PHOTO_BYTES,
     PRICE_TIERS,
@@ -113,6 +114,9 @@ def create_ticket():
     match_priority = payload.get("match_priority")
     if match_priority not in MATCH_PRIORITIES:
         match_priority = "quality"
+    preferred_gender = payload.get("preferred_gender")
+    if preferred_gender not in GENDERS:
+        preferred_gender = None
     lang = payload.get("lang")
     if lang not in TRANSLATIONS:
         lang = DEFAULT_LANG
@@ -148,7 +152,9 @@ def create_ticket():
     ticket.priority = classification["priority"]
     ticket.urgency_reason = classification["urgency_reason"]
 
-    team = select_technician_team(ticket, categories, match_priority=match_priority)
+    team = select_technician_team(
+        ticket, categories, match_priority=match_priority, preferred_gender=preferred_gender
+    )
     primary_specialty, primary_technician, primary_reasoning = team[0]
 
     if primary_technician:
@@ -232,6 +238,7 @@ def register_technician():
     specialty = payload.get("specialty")
     price_tier = (payload.get("price_tier") or "").strip() or None
     speed_rating = (payload.get("speed_rating") or "").strip() or None
+    gender = (payload.get("gender") or "").strip() or None
     lang = payload.get("lang")
     if lang not in TRANSLATIONS:
         lang = DEFAULT_LANG
@@ -246,6 +253,9 @@ def register_technician():
     if speed_rating is not None and speed_rating not in SPEED_RATINGS:
         return jsonify({"error": t["tech_error_invalid_option"]}), 400
 
+    if gender is not None and gender not in GENDERS:
+        return jsonify({"error": t["tech_error_invalid_option"]}), 400
+
     if _find_technician_by_email(email) is not None:
         return jsonify({"error": t["tech_error_email_exists"]}), 409
 
@@ -256,6 +266,7 @@ def register_technician():
         specialty=specialty,
         price_tier=price_tier,
         speed_rating=speed_rating,
+        gender=gender,
         available=True,
     )
     db.session.add(technician)

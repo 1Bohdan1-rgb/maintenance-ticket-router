@@ -13,6 +13,7 @@ SPEED_RATINGS = ("fast", "medium", "slow")
 MATCH_PRIORITIES = ("quality", "speed", "price")
 ALLOWED_PHOTO_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB, pre-base64 (decoded) size
+GENDERS = ("male", "female")
 
 
 def _utcnow():
@@ -32,6 +33,7 @@ class Technician(db.Model):
     resume_uploaded_at = db.Column(db.DateTime(timezone=True), nullable=True)
     price_tier = db.Column(db.String(20), nullable=True)
     speed_rating = db.Column(db.String(20), nullable=True)
+    gender = db.Column(db.String(20), nullable=True)
 
     tickets = db.relationship("Ticket", back_populates="assignee")
 
@@ -43,6 +45,7 @@ class Technician(db.Model):
             "available": self.available,
             "price_tier": self.price_tier,
             "speed_rating": self.speed_rating,
+            "gender": self.gender,
         }
 
 

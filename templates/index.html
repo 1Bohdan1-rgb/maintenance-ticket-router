@@ -465,7 +465,7 @@
           <div class="field">
             <label class="field-label" data-i18n="photo_label">{{ t.photo_label }}</label>
             <p class="photo-hint" id="photo-hint" data-i18n="photo_hint">{{ t.photo_hint }}</p>
-            <input type="file" id="photo_input" class="photo-input" accept="image/*" capture="environment">
+            <input type="file" id="photo_input" class="photo-input" accept="image/*">
             <div class="photo-preview-wrap hidden" id="photo-preview-wrap">
               <img id="photo-preview" alt="">
               <button type="button" class="photo-remove-btn" id="photo-remove-btn" data-i18n="photo_remove_button">{{ t.photo_remove_button }}</button>
@@ -492,6 +492,18 @@
                 <option value="quality" data-i18n-group="match_priority_names" data-i18n-option="quality"></option>
                 <option value="speed" data-i18n-group="match_priority_names" data-i18n-option="speed"></option>
                 <option value="price" data-i18n-group="match_priority_names" data-i18n-option="price"></option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="gender_preference_label">{{ t.gender_preference_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">🤝</span>
+              <select id="gender_preference">
+                <option value="" data-i18n="gender_preference_placeholder">{{ t.gender_preference_placeholder }}</option>
+                <option value="male" data-i18n-group="gender_names" data-i18n-option="male"></option>
+                <option value="female" data-i18n-group="gender_names" data-i18n-option="female"></option>
               </select>
             </div>
           </div>
@@ -597,6 +609,18 @@
                 <option value="fast" data-i18n-group="speed_rating_names" data-i18n-option="fast"></option>
                 <option value="medium" data-i18n-group="speed_rating_names" data-i18n-option="medium"></option>
                 <option value="slow" data-i18n-group="speed_rating_names" data-i18n-option="slow"></option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="tech_gender_label">{{ t.tech_gender_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">🤝</span>
+              <select id="tech_gender">
+                <option value="" data-i18n="tech_gender_placeholder">{{ t.tech_gender_placeholder }}</option>
+                <option value="male" data-i18n-group="gender_names" data-i18n-option="male"></option>
+                <option value="female" data-i18n-group="gender_names" data-i18n-option="female"></option>
               </select>
             </div>
           </div>
@@ -815,6 +839,7 @@
     const email = document.getElementById('customer_email').value.trim();
     const phone = document.getElementById('customer_phone').value.trim();
     const matchPriority = document.getElementById('match_priority').value;
+    const genderPreference = document.getElementById('gender_preference').value;
 
     errorEl.classList.add('hidden');
 
@@ -845,6 +870,7 @@
           customer_email: email || undefined,
           customer_phone: phone || undefined,
           match_priority: matchPriority,
+          preferred_gender: genderPreference || undefined,
           photo: photoDataUri || undefined,
           lang: currentLang,
         }),
@@ -899,6 +925,7 @@
     const specialty = document.getElementById('tech_specialty').value;
     const priceTier = document.getElementById('tech_price_tier').value;
     const speedRating = document.getElementById('tech_speed_rating').value;
+    const gender = document.getElementById('tech_gender').value;
 
     techErrorEl.classList.add('hidden');
     techResult.classList.add('hidden');
@@ -923,6 +950,7 @@
           specialty,
           price_tier: priceTier || undefined,
           speed_rating: speedRating || undefined,
+          gender: gender || undefined,
           lang: currentLang,
         }),
       });

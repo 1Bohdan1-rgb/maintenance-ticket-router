@@ -39,16 +39,17 @@ Rules:
 """
 
 
-def select_technician_team(ticket, categories, match_priority="quality"):
+def select_technician_team(ticket, categories, match_priority="quality", preferred_gender=None):
     """Pick one technician per required specialty for a (possibly
     multi-discipline) ticket.
 
     `categories` is the ordered, deduplicated list of specialties the
     ticket needs (from classify_ticket's "categories"). Each specialty is
     matched independently via select_technician(), reusing the exact same
-    resume/rating/match_priority logic per specialty - no cross-specialty
-    interaction is needed since a technician only ever has one specialty,
-    so the same technician can never be picked twice across categories.
+    resume/rating/match_priority/gender-preference logic per specialty - no
+    cross-specialty interaction is needed since a technician only ever has
+    one specialty, so the same technician can never be picked twice across
+    categories.
 
     Returns a list of (specialty, technician_or_None, reasoning_or_None)
     tuples, one per category, in the given order. For an ordinary
@@ -56,7 +57,10 @@ def select_technician_team(ticket, categories, match_priority="quality"):
     content to calling select_technician() directly.
     """
     return [
-        (specialty,) + select_technician(ticket, match_priority=match_priority, specialty=specialty)
+        (specialty,)
+        + select_technician(
+            ticket, match_priority=match_priority, specialty=specialty, preferred_gender=preferred_gender
+        )
         for specialty in categories
     ]
 
@@ -117,6 +121,21 @@ def _filter_by_match_priority(candidates, match_priority):
         if tier:
             return tier
     return candidates
+
+
+def _filter_by_gender_preference(candidates, preferred_gender):
+    """Narrow candidates to the client's preferred technician gender, if
+    one was given ("male" or "female"; None/omitted means no preference).
+
+    Never blocks assignment: if no candidate has that gender on file, the
+    full unfiltered list is returned instead of an empty one, so an unmet
+    preference falls back to the normal resume/rating selection rather
+    than leaving the ticket unassigned.
+    """
+    if not preferred_gender:
+        return candidates
+    matching = [c for c in candidates if c.gender == preferred_gender]
+    return matching if matching else candidates
 
 
 def _pick_best_by_rating(candidates, stats_by_id):
@@ -203,7 +222,7 @@ def _select_with_claude(ticket, candidates, stats_by_id, specialty):
     return chosen, reasoning
 
 
-def select_technician(ticket, match_priority="quality", specialty=None):
+def select_technician(ticket, match_priority="quality", specialty=None, preferred_gender=None):
     """Pick the best available technician for `ticket` in one specialty.
 
     `specialty` defaults to `ticket.category` (the ticket's primary/only
@@ -217,10 +236,15 @@ def select_technician(ticket, match_priority="quality", specialty=None):
     selection runs on what's left; "quality" leaves candidate selection
     exactly as before.
 
+    `preferred_gender` ("male", "female", or None) narrows the pool once
+    more after match_priority, same non-blocking fallback behavior (see
+    _filter_by_gender_preference) - an unmet preference never leaves the
+    ticket unassigned.
+
     Returns (technician_or_None, reasoning_or_None):
     - No matching/available technician: (None, None).
-    - Exactly one candidate (before or after match_priority narrowing):
-      assigned directly, no AI call, (technician, None).
+    - Exactly one candidate (before or after narrowing): assigned
+      directly, no AI call, (technician, None).
     - Candidates exist but none has a resume_summary: falls back to the
       highest-rated candidate, no AI call, (technician, None).
     - Otherwise Claude picks among the candidates using their resume
@@ -238,6 +262,11 @@ def select_technician(ticket, match_priority="quality", specialty=None):
         return candidates[0], None
 
     candidates = _filter_by_match_priority(candidates, match_priority)
+
+    if len(candidates) == 1:
+        return candidates[0], None
+
+    candidates = _filter_by_gender_preference(candidates, preferred_gender)
 
     if len(candidates) == 1:
         return candidates[0], None
