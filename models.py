@@ -11,6 +11,8 @@ STATUSES = ("new", "pending_assignment", "assigned", "confirmed", "completed", "
 PRICE_TIERS = ("budget", "mid", "premium")
 SPEED_RATINGS = ("fast", "medium", "slow")
 MATCH_PRIORITIES = ("quality", "speed", "price")
+ALLOWED_PHOTO_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB, pre-base64 (decoded) size
 
 
 def _utcnow():
@@ -64,6 +66,8 @@ class Ticket(db.Model):
     client_rating = db.Column(db.Integer, nullable=True)
     client_review = db.Column(db.Text, nullable=True)
     assignment_reasoning = db.Column(db.Text, nullable=True)
+    photo_data = db.Column(db.Text, nullable=True)
+    photo_content_type = db.Column(db.String(50), nullable=True)
 
     assignee = db.relationship("Technician", back_populates="tickets")
     assignments = db.relationship(
@@ -73,7 +77,7 @@ class Ticket(db.Model):
         cascade="all, delete-orphan",
     )
 
-    def to_dict(self, include_assignee=False):
+    def to_dict(self, include_assignee=False, include_photo=False):
         data = {
             "id": self.id,
             "title": self.title,
@@ -91,10 +95,14 @@ class Ticket(db.Model):
             "client_rating": self.client_rating,
             "client_review": self.client_review,
             "assignment_reasoning": self.assignment_reasoning,
+            "has_photo": bool(self.photo_data),
         }
         if include_assignee:
             data["assignee"] = self.assignee.to_dict() if self.assignee else None
             data["assignments"] = [a.to_dict() for a in self.assignments]
+        if include_photo:
+            data["photo_data"] = self.photo_data
+            data["photo_content_type"] = self.photo_content_type
         return data
 
 

@@ -211,6 +211,53 @@
   select { color: var(--text); cursor: pointer; }
   select:invalid { color: #ab9a85; }
   .field-icon-wrap + .field-icon-wrap { margin-top: 10px; }
+  .photo-hint {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .photo-input {
+    width: 100%;
+    background: var(--field-bg);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .photo-input::file-selector-button {
+    background: var(--accent);
+    color: #fff8f0;
+    border: none;
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-right: 10px;
+    cursor: pointer;
+  }
+  .photo-preview-wrap { margin-top: 10px; }
+  .photo-preview-wrap img {
+    display: block;
+    max-width: 100%;
+    max-height: 220px;
+    border-radius: 10px;
+    border: 1px solid var(--field-border);
+  }
+  .photo-remove-btn {
+    margin-top: 8px;
+    background: transparent;
+    border: 1px solid var(--field-border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .photo-remove-btn:hover { border-color: var(--accent); color: var(--accent); }
   .submit-btn {
     width: 100%;
     background: var(--accent);
@@ -412,6 +459,16 @@
             <div class="field-icon-wrap">
               <span class="field-icon">🔧</span>
               <textarea id="description" rows="5" data-i18n-placeholder="description_placeholder" placeholder="{{ t.description_placeholder }}"></textarea>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="photo_label">{{ t.photo_label }}</label>
+            <p class="photo-hint" id="photo-hint" data-i18n="photo_hint">{{ t.photo_hint }}</p>
+            <input type="file" id="photo_input" class="photo-input" accept="image/*" capture="environment">
+            <div class="photo-preview-wrap hidden" id="photo-preview-wrap">
+              <img id="photo-preview" alt="">
+              <button type="button" class="photo-remove-btn" id="photo-remove-btn" data-i18n="photo_remove_button">{{ t.photo_remove_button }}</button>
             </div>
           </div>
 
@@ -708,6 +765,49 @@
   const errorEl = document.getElementById('form-error');
   const submitBtn = document.getElementById('submit-btn');
 
+  const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+  let photoDataUri = null;
+  const photoInput = document.getElementById('photo_input');
+  const photoPreviewWrap = document.getElementById('photo-preview-wrap');
+  const photoPreview = document.getElementById('photo-preview');
+  const photoRemoveBtn = document.getElementById('photo-remove-btn');
+
+  function clearPhoto() {
+    photoDataUri = null;
+    photoInput.value = '';
+    photoPreview.src = '';
+    photoPreviewWrap.classList.add('hidden');
+  }
+
+  photoInput.addEventListener('change', () => {
+    const t = TRANSLATIONS[currentLang];
+    const file = photoInput.files[0];
+    errorEl.classList.add('hidden');
+    if (!file) return;
+
+    if (file.size > MAX_PHOTO_BYTES) {
+      errorEl.textContent = t.error_photo_too_large;
+      errorEl.classList.remove('hidden');
+      clearPhoto();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      photoDataUri = reader.result;
+      photoPreview.src = photoDataUri;
+      photoPreviewWrap.classList.remove('hidden');
+    };
+    reader.onerror = () => {
+      errorEl.textContent = t.error_photo_invalid_type;
+      errorEl.classList.remove('hidden');
+      clearPhoto();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  photoRemoveBtn.addEventListener('click', clearPhoto);
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const t = TRANSLATIONS[currentLang];
@@ -745,18 +845,23 @@
           customer_email: email || undefined,
           customer_phone: phone || undefined,
           match_priority: matchPriority,
+          photo: photoDataUri || undefined,
           lang: currentLang,
         }),
       });
 
-      if (!response.ok) throw new Error('request failed');
+      const data = await response.json().catch(() => ({}));
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || t.error_generic);
+      }
+
       ticketConfirmed = false;
       renderResult(data);
       form.reset();
+      clearPhoto();
     } catch (err) {
-      errorEl.textContent = t.error_generic;
+      errorEl.textContent = err.message || t.error_generic;
       errorEl.classList.remove('hidden');
     } finally {
       submitBtn.disabled = false;

@@ -94,6 +94,22 @@
   }
   tr:last-child td { border-bottom: none; }
   td.description { max-width: 360px; color: #4b5563; }
+  .ticket-thumb {
+    display: block;
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #e3e5e8;
+  }
+  .completed-thumb {
+    display: block;
+    width: 100%;
+    max-height: 160px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
   .pill {
     padding: 3px 9px;
     border-radius: 999px;
@@ -237,6 +253,11 @@
           {% endif %}
           · завершено {{ ticket.completed_at.strftime('%Y-%m-%d %H:%M') if ticket.completed_at else "—" }} UTC
         </div>
+        {% if ticket.photo_data %}
+        <a href="data:{{ ticket.photo_content_type }};base64,{{ ticket.photo_data }}" target="_blank" rel="noopener">
+          <img class="completed-thumb" src="data:{{ ticket.photo_content_type }};base64,{{ ticket.photo_data }}" alt="Фото заявки #{{ ticket.id }}">
+        </a>
+        {% endif %}
         {% if ticket.client_review %}
         <div class="completed-review">«{{ ticket.client_review }}»</div>
         {% endif %}
@@ -255,6 +276,7 @@
       <thead>
         <tr>
           <th>ID</th>
+          <th>Фото</th>
           <th>Опис</th>
           <th>Категорія</th>
           <th>Пріоритет</th>
@@ -266,6 +288,15 @@
         {% for t in tickets %}
         <tr>
           <td>#{{ t.id }}</td>
+          <td>
+            {% if t.photo_data %}
+            <a href="data:{{ t.photo_content_type }};base64,{{ t.photo_data }}" target="_blank" rel="noopener">
+              <img class="ticket-thumb" src="data:{{ t.photo_content_type }};base64,{{ t.photo_data }}" alt="Фото заявки #{{ t.id }}">
+            </a>
+            {% else %}
+            —
+            {% endif %}
+          </td>
           <td class="description">{{ t.description or "—" }}</td>
           <td>{{ t.category or "—" }}</td>
           <td>

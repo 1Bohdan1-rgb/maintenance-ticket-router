@@ -45,6 +45,12 @@ Rules:
 - The description may be in Ukrainian, English, or any other language - classify
   it regardless of language, and write "urgency_reason" in the same language as
   the description.
+- A photo of the problem may be attached. Use it as additional visual
+  evidence alongside the text - e.g. visibly exposed/scorched wiring
+  implies electrical, a visible pipe leak or water pooling implies
+  plumbing, damaged wood/drywall/framing implies carpentry - even if the
+  text description doesn't mention it. If the photo and text point to
+  different trades, include both in "categories".
 """
 
 
@@ -58,8 +64,14 @@ def _extract_json(text: str) -> dict:
     return json.loads(match.group(0))
 
 
-def classify_ticket(description: str) -> dict:
-    """Classify a maintenance ticket description via Claude.
+def classify_ticket(description: str, photo_data: str = None, photo_content_type: str = None) -> dict:
+    """Classify a maintenance ticket description (and optional photo) via Claude.
+
+    `photo_data` is a base64-encoded image (no "data:" prefix) and
+    `photo_content_type` its MIME type (e.g. "image/jpeg") - pass both or
+    neither. When given, the photo is sent alongside the text as visual
+    context; classification still works from the photo alone if
+    `description` is empty.
 
     Always returns a dict with "category" (str), "categories" (list of str,
     always at least one element), "priority", and "urgency_reason".
@@ -69,13 +81,30 @@ def classify_ticket(description: str) -> dict:
     priority="medium" on any failure (missing API key, network/API error, or
     an unparsable/invalid response).
     """
-    if not description or not description.strip():
+    has_text = bool(description and description.strip())
+    has_photo = bool(photo_data and photo_content_type)
+
+    if not has_text and not has_photo:
         return dict(FALLBACK_RESULT)
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         logger.warning("ANTHROPIC_API_KEY is not set; using fallback classification")
         return dict(FALLBACK_RESULT)
+
+    if has_photo:
+        content = [
+            {
+                "type": "text",
+                "text": description if has_text else "(Клієнт не надав текстовий опис - лише фото.)",
+            },
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": photo_content_type, "data": photo_data},
+            },
+        ]
+    else:
+        content = description
 
     # The SDK default read timeout is 600s (plus retries) - far too long to
     # block a ticket-creation web request, so cap it well below the request
@@ -87,7 +116,7 @@ def classify_ticket(description: str) -> dict:
             model=MODEL,
             max_tokens=300,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": description}],
+            messages=[{"role": "user", "content": content}],
         )
     except anthropic.NotFoundError:
         logger.exception("Claude API model/endpoint not found; using fallback classification")

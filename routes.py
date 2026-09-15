@@ -1,4 +1,7 @@
+import base64
+import binascii
 import logging
+import re
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, render_template, request, url_for
@@ -10,7 +13,9 @@ from email_notifier import (
     send_technician_notification,
 )
 from models import (
+    ALLOWED_PHOTO_TYPES,
     MATCH_PRIORITIES,
+    MAX_PHOTO_BYTES,
     PRICE_TIERS,
     SPECIALTIES,
     SPEED_RATINGS,
@@ -27,6 +32,35 @@ from translations import TRANSLATIONS, DEFAULT_LANG
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("tickets", __name__)
+
+_PHOTO_DATA_URI_RE = re.compile(r"^data:(image/[\w+.-]+);base64,(.+)$", re.DOTALL)
+
+
+def _parse_photo_data_uri(data_uri):
+    """Parse a 'data:image/jpeg;base64,....' URI from the photo upload field.
+
+    Returns (content_type, base64_payload) on success. Raises ValueError
+    with a translations error-key ("error_photo_invalid_type" or
+    "error_photo_too_large") on an unsupported/malformed type or a decoded
+    payload bigger than MAX_PHOTO_BYTES.
+    """
+    match = _PHOTO_DATA_URI_RE.match(data_uri)
+    if not match:
+        raise ValueError("error_photo_invalid_type")
+
+    content_type, payload = match.group(1), match.group(2)
+    if content_type not in ALLOWED_PHOTO_TYPES:
+        raise ValueError("error_photo_invalid_type")
+
+    try:
+        decoded = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("error_photo_invalid_type") from exc
+
+    if len(decoded) > MAX_PHOTO_BYTES:
+        raise ValueError("error_photo_too_large")
+
+    return content_type, payload
 
 DASHBOARD_CATEGORIES = ("plumbing", "electrical", "carpentry", "general")
 DASHBOARD_PRIORITIES = ("low", "medium", "high", "emergency")
@@ -86,18 +120,29 @@ def create_ticket():
     if not customer_email and not customer_phone:
         return jsonify({"error": TRANSLATIONS[lang]["error_contact_required"]}), 400
 
+    photo = payload.get("photo")
+    photo_content_type = None
+    photo_data = None
+    if photo:
+        try:
+            photo_content_type, photo_data = _parse_photo_data_uri(photo)
+        except ValueError as exc:
+            return jsonify({"error": TRANSLATIONS[lang][str(exc)]}), 400
+
     ticket = Ticket(
         title=title,
         description=description,
         status="new",
         customer_email=customer_email,
         customer_phone=customer_phone,
+        photo_data=photo_data,
+        photo_content_type=photo_content_type,
         lang=lang,
     )
     db.session.add(ticket)
     db.session.commit()
 
-    classification = classify_ticket(description or "")
+    classification = classify_ticket(description or "", photo_data=photo_data, photo_content_type=photo_content_type)
     categories = classification["categories"]
     ticket.category = classification["category"]
     ticket.priority = classification["priority"]
@@ -398,7 +443,7 @@ def dashboard():
 @bp.route("/dashboard/view", methods=["GET"])
 def dashboard_view():
     stats, tickets = _build_dashboard_stats()
-    recent_tickets = [t.to_dict(include_assignee=True) for t in tickets[:10]]
+    recent_tickets = [t.to_dict(include_assignee=True, include_photo=True) for t in tickets[:10]]
     technicians = Technician.query.order_by(Technician.name).all()
     completed_tickets = (
         Ticket.query.filter_by(status="completed")
@@ -440,7 +485,7 @@ def get_ticket(ticket_id):
     ticket = Ticket.query.get(ticket_id)
     if ticket is None:
         return jsonify({"error": "ticket not found"}), 404
-    return jsonify(ticket.to_dict(include_assignee=True))
+    return jsonify(ticket.to_dict(include_assignee=True, include_photo=True))
 
 
 @bp.route("/tickets/<int:ticket_id>", methods=["PATCH"])
