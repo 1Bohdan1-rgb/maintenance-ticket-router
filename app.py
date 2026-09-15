@@ -29,7 +29,7 @@ SEED_TECHNICIANS = [
     {
         "name": "Sergiy Boyko",
         "specialty": "carpentry",
-        "available": False,
+        "available": True,
         "email": "sergiy@example.com",
         "phone": "+380631112233",
     },
