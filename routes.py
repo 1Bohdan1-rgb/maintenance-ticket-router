@@ -357,6 +357,30 @@ def set_technician_availability(technician_id):
     return jsonify(technician.to_dict())
 
 
+@bp.route("/technicians/<int:technician_id>", methods=["DELETE"])
+def delete_technician(technician_id):
+    """Remove a technician (e.g. test/junk data) - refuses if they're
+    referenced by any ticket/assignment, since unlike a ticket a technician
+    can be historical data other rows depend on; deactivate via the
+    availability endpoint instead for anyone with real ticket history.
+    """
+    technician = Technician.query.get(technician_id)
+    if technician is None:
+        return jsonify({"error": "technician not found"}), 404
+
+    has_history = (
+        Ticket.query.filter_by(assigned_to=technician_id).first() is not None
+        or TicketAssignment.query.filter_by(technician_id=technician_id).first() is not None
+    )
+    if has_history:
+        return jsonify({"error": "technician has ticket history; use the availability endpoint instead"}), 409
+
+    db.session.delete(technician)
+    db.session.commit()
+
+    return "", 204
+
+
 @bp.route("/technician/upload", methods=["GET"])
 def technician_upload_form():
     email = (request.args.get("email") or "").strip()
