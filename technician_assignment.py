@@ -16,13 +16,22 @@ MIN_CATEGORY_SAMPLES = 2
 
 SYSTEM_PROMPT = """You are a dispatcher assistant choosing the best technician for a maintenance ticket.
 
-You will receive the ticket details and a list of candidate technicians who
-already match the required category and are available. Each candidate has a
-resume summary, an average customer rating, and a count of completed jobs.
+You will receive the ticket details, the client's stated priority (quality,
+speed, or price), and a list of candidate technicians who already match the
+required category and are available. Each candidate has a resume summary,
+an average customer rating, a count of completed jobs, a typical price tier
+(budget/mid/premium), and a typical speed rating (fast/medium/slow).
 
 Pick the single best candidate based on how well their resume/experience
-fits the specific issue described, weighed against their rating history. A
-technician with little or no rating history is not automatically worse -
+fits the specific issue described, weighed against their rating history -
+then weigh that against the client's stated priority:
+- "quality": resume fit and rating history decide it; price/speed are a
+  tiebreaker at most.
+- "speed": prefer a faster candidate, unless a slower one is a clearly
+  better fit for the issue or meaningfully better rated.
+- "price": prefer a cheaper candidate, unless a pricier one is a clearly
+  better fit for the issue or meaningfully better rated.
+A technician with little or no rating history is not automatically worse -
 use judgment, but prefer proven, well-rated technicians when the fit
 between candidates is otherwise close.
 
@@ -37,6 +46,14 @@ Rules:
 - "reasoning" is a single short sentence explaining the choice, written in
   the same language as the ticket description.
 """
+
+_PRICE_TIER_LABELS = {"budget": "бюджетна", "mid": "середня", "premium": "преміум"}
+_SPEED_RATING_LABELS = {"fast": "швидко", "medium": "середньо", "slow": "повільно"}
+_MATCH_PRIORITY_LABELS = {
+    "quality": "якість виконання - найкращий фахівець під цю заявку, ціна/швидкість другорядні",
+    "speed": "швидкість - клієнту важливо, щоб приїхали якнайшвидше",
+    "price": "ціна - клієнт хоче заощадити",
+}
 
 
 def select_technician_team(ticket, categories, match_priority="quality", preferred_gender=None):
@@ -97,13 +114,19 @@ def _filter_by_match_priority(candidates, match_priority):
     """Narrow candidates to the tier that best matches the client's chosen
     match_priority ("speed" or "price"; "quality" leaves the list as-is).
 
+    Used only as the deterministic fallback (_fallback_pick) for when no AI
+    signal is available at all - no candidate has a resume, no API key is
+    configured, or the Claude call fails/is unusable. Whenever Claude does
+    run, it sees the full candidate pool instead (with each candidate's
+    price tier/speed rating and the client's priority spelled out in the
+    prompt) and reasons about the trade-off itself, rather than having
+    candidates discarded before it gets a say.
+
     Ranks candidates into three tiers - best match, neutral, worst match -
-    and returns the best non-empty tier, so the rest of the pipeline (rating
-    stats, resume-based Claude selection) still runs among a group that
-    already satisfies the client's preference as well as possible. A
-    technician with the field unset (None) is treated as neutral, not
-    excluded, same as the explicit middle value - this can never return an
-    empty list since every candidate falls into exactly one tier.
+    and returns the best non-empty tier. A technician with the field unset
+    (None) is treated as neutral, not excluded, same as the explicit middle
+    value - this can never return an empty list since every candidate falls
+    into exactly one tier.
     """
     if match_priority == "price":
         field, best, worst = "price_tier", "budget", "premium"
@@ -147,6 +170,18 @@ def _pick_best_by_rating(candidates, stats_by_id):
     return sorted(candidates, key=sort_key)[0]
 
 
+def _fallback_pick(candidates, stats_by_id, match_priority):
+    """Deterministic pick used whenever no AI signal is available at all -
+    no candidate has a resume, no API key is configured, or the Claude call
+    failed/returned something unusable. Narrows by the client's price/speed
+    tier first (see _filter_by_match_priority) since that's the only signal
+    left to honor their stated priority, then picks the best-rated within
+    that tier.
+    """
+    tiered = _filter_by_match_priority(candidates, match_priority)
+    return _pick_best_by_rating(tiered, stats_by_id)
+
+
 def _format_candidate(candidate, stats):
     resume = candidate.resume_summary or "Резюме-саммарі відсутнє."
     if stats["avg_rating"] is None:
@@ -154,30 +189,36 @@ def _format_candidate(candidate, stats):
     else:
         basis = "у цій категорії" if stats["based_on"] == "category" else "по всіх категоріях"
         rating = f"{stats['avg_rating']:.1f}/5 {basis}"
+    price_label = _PRICE_TIER_LABELS.get(candidate.price_tier, "не вказано")
+    speed_label = _SPEED_RATING_LABELS.get(candidate.speed_rating, "не вказано")
     return (
         f"ID кандидата: {candidate.id}\n"
         f"Ім'я: {candidate.name}\n"
         f"Резюме: {resume}\n"
         f"Середній рейтинг: {rating}\n"
-        f"Виконаних заявок: {stats['completed_count']}"
+        f"Виконаних заявок: {stats['completed_count']}\n"
+        f"Цінова категорія: {price_label}\n"
+        f"Швидкість виконання: {speed_label}"
     )
 
 
-def _select_with_claude(ticket, candidates, stats_by_id, specialty):
+def _select_with_claude(ticket, candidates, stats_by_id, specialty, match_priority):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         logger.warning(
             "ANTHROPIC_API_KEY is not set; falling back to rating-based technician assignment"
         )
-        return _pick_best_by_rating(candidates, stats_by_id), None
+        return _fallback_pick(candidates, stats_by_id, match_priority), None
 
     candidates_block = "\n\n".join(_format_candidate(c, stats_by_id[c.id]) for c in candidates)
+    priority_label = _MATCH_PRIORITY_LABELS.get(match_priority, _MATCH_PRIORITY_LABELS["quality"])
     user_prompt = (
         f"Нова заявка:\n"
         f"Заголовок: {ticket.title}\n"
         f"Опис: {ticket.description or '—'}\n"
         f"Потрібна спеціальність для цього призначення: {specialty}\n"
-        f"Пріоритет: {ticket.priority or '—'}\n\n"
+        f"Пріоритет заявки: {ticket.priority or '—'}\n"
+        f"Що найважливіше для клієнта: {priority_label}\n\n"
         f"Кандидати:\n\n{candidates_block}"
     )
 
@@ -199,7 +240,7 @@ def _select_with_claude(ticket, candidates, stats_by_id, specialty):
             "falling back to rating-based assignment",
             ticket.id,
         )
-        return _pick_best_by_rating(candidates, stats_by_id), None
+        return _fallback_pick(candidates, stats_by_id, match_priority), None
 
     text = next((block.text for block in response.content if block.type == "text"), "")
 
@@ -209,7 +250,7 @@ def _select_with_claude(ticket, candidates, stats_by_id, specialty):
         reasoning = (result.get("reasoning") or "").strip() or None
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         logger.warning("Could not parse Claude technician-selection response: %r", text)
-        return _pick_best_by_rating(candidates, stats_by_id), None
+        return _fallback_pick(candidates, stats_by_id, match_priority), None
 
     chosen = next((c for c in candidates if c.id == technician_id), None)
     if chosen is None:
@@ -217,7 +258,7 @@ def _select_with_claude(ticket, candidates, stats_by_id, specialty):
             "Claude picked technician_id=%r which is not among the candidates; falling back",
             technician_id,
         )
-        return _pick_best_by_rating(candidates, stats_by_id), None
+        return _fallback_pick(candidates, stats_by_id, match_priority), None
 
     return chosen, reasoning
 
@@ -230,38 +271,38 @@ def select_technician(ticket, match_priority="quality", specialty=None, preferre
     multi-discipline ticket (see select_technician_team).
 
     `match_priority` is the client's stated preference - "quality" (default),
-    "speed", or "price". For "speed"/"price" the candidate pool is first
-    narrowed to whichever tier best matches that preference (see
-    _filter_by_match_priority) before the existing resume/rating-based
-    selection runs on what's left; "quality" leaves candidate selection
-    exactly as before.
+    "speed", or "price". Whenever Claude gets to weigh in, it sees the full
+    candidate pool - including each candidate's price tier/speed rating and
+    the client's stated priority spelled out in the prompt - and reasons
+    about the trade-off against resume fit and rating itself, rather than
+    having candidates discarded before it gets a say. Only when no AI
+    signal is available at all (see _fallback_pick below) does "speed"/
+    "price" fall back to a deterministic tier filter; "quality" never
+    narrows the pool.
 
-    `preferred_gender` ("male", "female", or None) narrows the pool once
-    more after match_priority, same non-blocking fallback behavior (see
+    `preferred_gender` ("male", "female", or None) narrows the pool before
+    stats/AI selection, non-blocking fallback behavior (see
     _filter_by_gender_preference) - an unmet preference never leaves the
     ticket unassigned.
 
     Returns (technician_or_None, reasoning_or_None):
     - No matching/available technician: (None, None).
-    - Exactly one candidate (before or after narrowing): assigned
+    - Exactly one candidate (before or after gender narrowing): assigned
       directly, no AI call, (technician, None).
-    - Candidates exist but none has a resume_summary: falls back to the
-      highest-rated candidate, no AI call, (technician, None).
+    - Candidates exist but none has a resume_summary: no AI call, falls
+      back to the client's price/speed tier then highest rating (see
+      _fallback_pick), (technician, None).
     - Otherwise Claude picks among the candidates using their resume
-      summaries and rating history, returning its reasoning. If the Claude
-      call fails or returns something unusable, falls back to the
-      highest-rated candidate, (technician, None).
+      summaries, rating history, price tier, and speed rating, weighed
+      against match_priority, returning its reasoning. If the Claude call
+      fails or returns something unusable, falls back the same way as the
+      no-resume case, (technician, None).
     """
     specialty = specialty or ticket.category
     candidates = Technician.query.filter_by(specialty=specialty, available=True).all()
 
     if not candidates:
         return None, None
-
-    if len(candidates) == 1:
-        return candidates[0], None
-
-    candidates = _filter_by_match_priority(candidates, match_priority)
 
     if len(candidates) == 1:
         return candidates[0], None
@@ -274,6 +315,6 @@ def select_technician(ticket, match_priority="quality", specialty=None, preferre
     stats_by_id = {c.id: _technician_stats(c.id, specialty) for c in candidates}
 
     if not any(c.resume_summary for c in candidates):
-        return _pick_best_by_rating(candidates, stats_by_id), None
+        return _fallback_pick(candidates, stats_by_id, match_priority), None
 
-    return _select_with_claude(ticket, candidates, stats_by_id, specialty)
+    return _select_with_claude(ticket, candidates, stats_by_id, specialty, match_priority)
