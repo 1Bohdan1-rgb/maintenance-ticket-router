@@ -1,6 +1,9 @@
 import base64
 import binascii
+import functools
+import hmac
 import logging
+import os
 import re
 from datetime import datetime, timezone
 
@@ -33,6 +36,52 @@ from translations import TRANSLATIONS, DEFAULT_LANG
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("tickets", __name__)
+
+
+def _admin_token_matches(provided):
+    # Read at request time (not import time) - routes.py is imported before
+    # app.py calls load_dotenv(), so a module-level os.environ.get() here
+    # would always see an unset ADMIN_TOKEN in local dev.
+    token = os.environ.get("ADMIN_TOKEN")
+    if not token:
+        return False
+    return hmac.compare_digest(provided or "", token)
+
+
+def require_admin_token(view):
+    """Require a matching X-Admin-Token header - for JSON API endpoints
+    that mutate or delete data. Fails closed: refuses every request
+    (including with the right token) if ADMIN_TOKEN isn't configured on
+    the server, rather than silently leaving the endpoint open.
+    """
+
+    @functools.wraps(view)
+    def wrapped(*args, **kwargs):
+        if not _admin_token_matches(request.headers.get("X-Admin-Token")):
+            return jsonify({"error": "unauthorized"}), 401
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def require_admin_basic(view):
+    """Require HTTP Basic Auth (any username, ADMIN_TOKEN as the password)
+    - for browser-viewed pages like the business dashboard, so opening the
+    URL prompts the browser's native login dialog instead of needing a
+    custom header a browser can't send on its own.
+    """
+
+    @functools.wraps(view)
+    def wrapped(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not _admin_token_matches(auth.password):
+            response = jsonify({"error": "unauthorized"})
+            response.status_code = 401
+            response.headers["WWW-Authenticate"] = 'Basic realm="Dashboard"'
+            return response
+        return view(*args, **kwargs)
+
+    return wrapped
 
 _PHOTO_DATA_URI_RE = re.compile(r"^data:(image/[\w+.-]+);base64,(.+)$", re.DOTALL)
 
@@ -223,6 +272,7 @@ def confirm_ticket(ticket_id):
 
 
 @bp.route("/tickets/<int:ticket_id>", methods=["DELETE"])
+@require_admin_token
 def delete_ticket(ticket_id):
     """Remove a ticket (e.g. test/junk data) and its assignment rows -
     Ticket.assignments cascades on delete, so no manual cleanup needed.
@@ -238,6 +288,7 @@ def delete_ticket(ticket_id):
 
 
 @bp.route("/admin/reassign-pending", methods=["POST"])
+@require_admin_token
 def reassign_pending():
     """Retry technician matching for ticket_assignments rows still missing
     a technician.
@@ -337,6 +388,7 @@ def register_technician():
 
 
 @bp.route("/technicians/<int:technician_id>/availability", methods=["PATCH"])
+@require_admin_token
 def set_technician_availability(technician_id):
     """Toggle a technician in/out of the assignment pool without deleting
     them (e.g. taking test/seed data back out of live routing, or a
@@ -358,6 +410,7 @@ def set_technician_availability(technician_id):
 
 
 @bp.route("/technicians/<int:technician_id>", methods=["DELETE"])
+@require_admin_token
 def delete_technician(technician_id):
     """Remove a technician (e.g. test/junk data) - refuses if they're
     referenced by any ticket/assignment, since unlike a ticket a technician
@@ -552,12 +605,14 @@ def ticket_review_submit(ticket_id):
 
 
 @bp.route("/dashboard", methods=["GET"])
+@require_admin_basic
 def dashboard():
     stats, _ = _build_dashboard_stats()
     return jsonify(stats)
 
 
 @bp.route("/dashboard/view", methods=["GET"])
+@require_admin_basic
 def dashboard_view():
     stats, tickets = _build_dashboard_stats()
     recent_tickets = [t.to_dict(include_assignee=True, include_photo=True) for t in tickets[:10]]
@@ -606,6 +661,7 @@ def get_ticket(ticket_id):
 
 
 @bp.route("/tickets/<int:ticket_id>", methods=["PATCH"])
+@require_admin_token
 def update_ticket(ticket_id):
     ticket = Ticket.query.get(ticket_id)
     if ticket is None:
