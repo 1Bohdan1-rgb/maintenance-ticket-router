@@ -1,0 +1,23 @@
+Single-database configuration for Flask, via Flask-Migrate (Alembic).
+
+Schema changes go through Alembic now - the old migrate_add_*.py
+standalone scripts are gone. Workflow for a new schema change:
+
+1. Edit models.py.
+2. Generate a migration (autogenerate diffs models.py against the DB
+   pointed to by DATABASE_URL):
+       flask db migrate -m "add whatever"
+3. Read the generated file in migrations/versions/ - autogenerate is a
+   starting point, not gospel (it misses some renames/defaults).
+4. Apply it locally and confirm the app still works:
+       flask db upgrade
+5. Commit the migration file, push, then run the same `flask db upgrade`
+   against prod (e.g. via Render's Shell tab, where DATABASE_URL is
+   already set) before/alongside the deploy that needs the new column -
+   otherwise requests touching it will fail until it's run.
+
+versions/0001-0011 reconstruct the schema evolution that used to live in
+migrate_add_*.py scripts (see each file's docstring for which script it
+replaces). Prod was brought under Alembic via `flask db stamp head`, not
+`upgrade` - the schema already existed, stamp just recorded that fact in
+alembic_version without re-running any DDL.

@@ -3,6 +3,7 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
+from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from models import Technician, db
@@ -10,6 +11,8 @@ from routes import bp as tickets_bp
 from translations import DEFAULT_LANG, TRANSLATIONS
 
 load_dotenv()
+
+migrate = Migrate()
 
 SEED_TECHNICIANS = [
     {
@@ -64,6 +67,7 @@ def create_app():
     app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB, for resume uploads
 
     db.init_app(app)
+    migrate.init_app(app, db)
     app.register_blueprint(tickets_bp)
 
     @app.route("/")
@@ -80,6 +84,11 @@ def create_app():
         return jsonify({"status": "ok", "service": "maintenance-ticket-router"})
 
     with app.app_context():
+        # Schema changes now go through Alembic (migrations/versions/, run via
+        # `flask db upgrade`) - this create_all() is just local/test
+        # convenience for building a brand-new DB from scratch. It's a no-op
+        # against prod: create_all() only creates tables that don't exist yet,
+        # it never ALTERs an existing table to add a column.
         db.create_all()
         seed_technicians()
 
