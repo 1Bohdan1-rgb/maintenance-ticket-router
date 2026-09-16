@@ -62,6 +62,8 @@ class Ticket(db.Model):
     customer_phone = db.Column(db.String(30), nullable=True)
     urgency_reason = db.Column(db.Text, nullable=True)
     lang = db.Column(db.String(5), nullable=True, default="uk")
+    match_priority = db.Column(db.String(20), nullable=True)
+    preferred_gender = db.Column(db.String(20), nullable=True)
     assigned_to = db.Column(db.Integer, db.ForeignKey("technicians.id"), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
@@ -91,6 +93,8 @@ class Ticket(db.Model):
             "customer_email": self.customer_email,
             "customer_phone": self.customer_phone,
             "urgency_reason": self.urgency_reason,
+            "match_priority": self.match_priority,
+            "preferred_gender": self.preferred_gender,
             "assigned_to": self.assigned_to,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

@@ -85,6 +85,26 @@ def require_admin_basic(view):
 
 _PHOTO_DATA_URI_RE = re.compile(r"^data:(image/[\w+.-]+);base64,(.+)$", re.DOTALL)
 
+# Pragmatic, not RFC-5322-exact - good enough to reject obvious typos
+# ("bob@", "bob@site") without rejecting real addresses.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# Allows an optional leading "+", then digits/spaces/dashes/dots/parens for
+# formatting - actual validity is the digit count check below (E.164 caps
+# a real phone number at 15 digits; 7 is a reasonable practical minimum).
+_PHONE_RE = re.compile(r"^\+?[\d\s\-().]{7,25}$")
+
+
+def _is_valid_email(value):
+    return bool(_EMAIL_RE.match(value))
+
+
+def _is_valid_phone(value):
+    if not _PHONE_RE.match(value):
+        return False
+    digit_count = sum(ch.isdigit() for ch in value)
+    return 7 <= digit_count <= 15
+
 
 def _parse_photo_data_uri(data_uri):
     """Parse a 'data:image/jpeg;base64,....' URI from the photo upload field.
@@ -173,6 +193,12 @@ def create_ticket():
     if not customer_email and not customer_phone:
         return jsonify({"error": TRANSLATIONS[lang]["error_contact_required"]}), 400
 
+    if customer_email and not _is_valid_email(customer_email):
+        return jsonify({"error": TRANSLATIONS[lang]["error_email_invalid"]}), 400
+
+    if customer_phone and not _is_valid_phone(customer_phone):
+        return jsonify({"error": TRANSLATIONS[lang]["error_phone_invalid"]}), 400
+
     photo = payload.get("photo")
     photo_content_type = None
     photo_data = None
@@ -191,6 +217,8 @@ def create_ticket():
         photo_data=photo_data,
         photo_content_type=photo_content_type,
         lang=lang,
+        match_priority=match_priority,
+        preferred_gender=preferred_gender,
     )
     db.session.add(ticket)
     db.session.commit()
@@ -299,14 +327,22 @@ def reassign_pending():
     later becomes available. This re-runs select_technician() for each open
     gap and fills in whatever now matches, catching up tickets that were
     confirmed - and whose technician therefore never got notified - before
-    the gap was fixed.
+    the gap was fixed. Reuses the ticket's own saved match_priority/
+    preferred_gender (defaulting to "quality"/None for older tickets
+    created before those columns existed) instead of silently ignoring
+    what the client originally asked for.
     """
     open_assignments = TicketAssignment.query.filter(TicketAssignment.technician_id.is_(None)).all()
 
     reassigned = []
     for assignment in open_assignments:
         ticket = assignment.ticket
-        technician, reasoning = select_technician(ticket, specialty=assignment.specialty)
+        technician, reasoning = select_technician(
+            ticket,
+            match_priority=ticket.match_priority or "quality",
+            specialty=assignment.specialty,
+            preferred_gender=ticket.preferred_gender,
+        )
         if technician is None:
             continue
 
@@ -358,6 +394,12 @@ def register_technician():
 
     if not name or not email or not phone or specialty not in SPECIALTIES:
         return jsonify({"error": t["tech_error_required"]}), 400
+
+    if not _is_valid_email(email):
+        return jsonify({"error": t["tech_error_email_invalid"]}), 400
+
+    if not _is_valid_phone(phone):
+        return jsonify({"error": t["tech_error_phone_invalid"]}), 400
 
     if price_tier is not None and price_tier not in PRICE_TIERS:
         return jsonify({"error": t["tech_error_invalid_option"]}), 400
