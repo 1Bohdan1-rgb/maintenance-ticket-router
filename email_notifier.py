@@ -29,22 +29,22 @@ def _build_technician_notification_html(
     (technician_dashboard.html's --accent/--text-muted/etc.) for a
     consistent look across the product.
     """
-    priority_color = _PRIORITY_COLORS.get(ticket.priority, "#8a7761")
+    priority_color = _PRIORITY_COLORS.get(ticket.priority, "#64748b")
 
     severity_rows = ""
     if ticket.severity:
-        severity_color = _SEVERITY_COLORS.get(ticket.severity, "#8a7761")
+        severity_color = _SEVERITY_COLORS.get(ticket.severity, "#64748b")
         severity_rows = f"""
           <tr>
-            <td style="padding:6px 0; color:#8a7761; font-size:13px;">Серйозність</td>
+            <td style="padding:6px 0; color:#64748b; font-size:13px;">Серйозність</td>
             <td style="padding:6px 0; text-align:right;">
-              <span style="background:{severity_color}; color:#fff8f0; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700;">{ticket.severity}/5</span>
+              <span style="background:{severity_color}; color:#ffffff; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700;">{ticket.severity}/5</span>
             </td>
           </tr>"""
         if ticket.severity_reason:
             severity_rows += f"""
           <tr>
-            <td colspan="2" style="padding:0 0 6px; color:#8a7761; font-size:12px; font-style:italic;">{_esc(ticket.severity_reason)}</td>
+            <td colspan="2" style="padding:0 0 6px; color:#64748b; font-size:12px; font-style:italic;">{_esc(ticket.severity_reason)}</td>
           </tr>"""
 
     photo_row = ""
@@ -52,54 +52,54 @@ def _build_technician_notification_html(
         photo_row = f"""
           <tr>
             <td colspan="2" style="padding:14px 0 0;">
-              <img src="cid:{photo_cid}" alt="Фото проблеми" width="504" style="max-width:100%; border-radius:8px; display:block; border:1px solid #e8dcc8;">
+              <img src="cid:{photo_cid}" alt="Фото проблеми" width="504" style="max-width:100%; border-radius:8px; display:block; border:1px solid #e2e8f0;">
             </td>
           </tr>"""
 
     return f"""\
 <!doctype html>
 <html>
-<body style="margin:0; padding:24px; background:#ede3d3; font-family:system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color:#3a2e26;">
+<body style="margin:0; padding:24px; background:#e2e8f0; font-family:system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color:#334155;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center">
-        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px; width:100%; background:#fffdf9; border:1px solid #e8dcc8; border-radius:14px; overflow:hidden;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px; width:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden;">
           <tr>
-            <td style="background:#c1652f; padding:20px 28px;">
-              <span style="color:#fff8f0; font-size:18px; font-weight:700;">Нова заявка №{ticket.id}</span>
+            <td style="background:#334155; padding:20px 28px;">
+              <span style="color:#ffffff; font-size:18px; font-weight:700;">Нова заявка №{ticket.id}</span>
             </td>
           </tr>
           <tr>
             <td style="padding:24px 28px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
                 <tr>
-                  <td style="padding:6px 0; color:#8a7761; font-size:13px;">Категорія</td>
+                  <td style="padding:6px 0; color:#64748b; font-size:13px;">Категорія</td>
                   <td style="padding:6px 0; text-align:right; font-weight:600;">{_esc(category_name)}</td>
                 </tr>
                 <tr>
-                  <td style="padding:6px 0; color:#8a7761; font-size:13px;">Пріоритет</td>
+                  <td style="padding:6px 0; color:#64748b; font-size:13px;">Пріоритет</td>
                   <td style="padding:6px 0; text-align:right;">
-                    <span style="background:{priority_color}; color:#fff8f0; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; text-transform:uppercase;">{_esc(priority_name)}</span>
+                    <span style="background:{priority_color}; color:#ffffff; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; text-transform:uppercase;">{_esc(priority_name)}</span>
                   </td>
                 </tr>
                 {severity_rows}
-                <tr><td colspan="2" style="padding-top:14px; border-top:1px solid #e8dcc8;"></td></tr>
+                <tr><td colspan="2" style="padding-top:14px; border-top:1px solid #e2e8f0;"></td></tr>
                 <tr>
-                  <td colspan="2" style="padding:14px 0 4px; color:#8a7761; font-size:13px;">Опис проблеми</td>
+                  <td colspan="2" style="padding:14px 0 4px; color:#64748b; font-size:13px;">Опис проблеми</td>
                 </tr>
                 <tr>
                   <td colspan="2" style="padding:0; font-size:14px; line-height:1.5;">{_esc(ticket.description) or "—"}</td>
                 </tr>
                 {photo_row}
-                <tr><td colspan="2" style="padding-top:14px; border-top:1px solid #e8dcc8;"></td></tr>
+                <tr><td colspan="2" style="padding-top:14px; border-top:1px solid #e2e8f0;"></td></tr>
                 <tr>
-                  <td colspan="2" style="padding:14px 0 4px; color:#8a7761; font-size:13px;">Обґрунтування пріоритету</td>
+                  <td colspan="2" style="padding:14px 0 4px; color:#64748b; font-size:13px;">Обґрунтування пріоритету</td>
                 </tr>
                 <tr>
-                  <td colspan="2" style="padding:0 0 14px; font-size:13px; font-style:italic; color:#5c4d3e;">{_esc(ticket.urgency_reason) or "—"}</td>
+                  <td colspan="2" style="padding:0 0 14px; font-size:13px; font-style:italic; color:#475569;">{_esc(ticket.urgency_reason) or "—"}</td>
                 </tr>
                 <tr>
-                  <td colspan="2" style="padding:14px 16px; background:#faf5eb; border-radius:10px; font-size:13px;">
+                  <td colspan="2" style="padding:14px 16px; background:#f1f5f9; border-radius:10px; font-size:13px;">
                     <strong>Контакт клієнта:</strong> {_esc(customer_contact)}
                   </td>
                 </tr>

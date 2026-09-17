@@ -4,6 +4,7 @@ refactor that split message-building out of send_technician_notification.
 """
 import base64
 
+import email_notifier
 from email_notifier import _build_technician_notification_message
 from models import Technician, Ticket, db
 
@@ -102,6 +103,18 @@ def test_message_has_no_image_part_without_photo(ctx):
     image_parts = [p for p in message.walk() if p.get_content_maintype() == "image"]
     assert image_parts == []
     assert 'src="cid:' not in _html_part(message)
+
+
+def test_priority_and_severity_colors_stay_semantic():
+    # Regression guard for the slate/sky rebrand: these map priority/
+    # severity to red/orange/gold/green, not the brand accent color - a
+    # future palette edit must not accidentally sweep these into blue.
+    assert email_notifier._PRIORITY_COLORS["emergency"].lower() == "#a63d2f"
+    assert email_notifier._PRIORITY_COLORS["high"].lower() == "#c1652f"
+    assert email_notifier._PRIORITY_COLORS["medium"].lower() == "#c99a3b"
+    assert email_notifier._PRIORITY_COLORS["low"].lower() == "#5b7b4b"
+    assert email_notifier._SEVERITY_COLORS[5].lower() == "#a63d2f"
+    assert email_notifier._SEVERITY_COLORS[1].lower() == "#5b7b4b"
 
 
 def test_html_escapes_description_and_reasoning(ctx):
