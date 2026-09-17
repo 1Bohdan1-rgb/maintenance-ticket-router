@@ -21,6 +21,9 @@
     font-size: 22px;
     font-weight: 600;
   }
+  nav.top-links { margin-bottom: 8px; font-size: 13px; }
+  nav.top-links a { color: #0ea5e9; text-decoration: none; font-weight: 600; }
+  nav.top-links a:hover { text-decoration: underline; }
   .cards {
     display: flex;
     flex-wrap: wrap;
@@ -172,6 +175,7 @@
 </style>
 </head>
 <body>
+  <nav class="top-links"><a href="{{ url_for('tickets.analytics_view') }}">📊 Аналітика та AI Insights →</a></nav>
   <h1>Панель заявок</h1>
 
   <div class="cards">

@@ -144,6 +144,13 @@ class TicketAssignment(db.Model):
     "accepted", or transiently "declined" right before the row is either
     reassigned to a new candidate (back to "pending") or left as a gap
     (technician_id reset to NULL) if none is available.
+
+    `decline_count` is a running total of how many times *this slot* has
+    been declined - unlike response_status (which a successful reassignment
+    overwrites back to "pending", losing the fact that a decline ever
+    happened), this persists across reassignment so analytics can compute
+    an accurate decline rate instead of only ever seeing declines that
+    happened to end in an unfilled gap.
     """
 
     __tablename__ = "ticket_assignments"
@@ -154,6 +161,7 @@ class TicketAssignment(db.Model):
     specialty = db.Column(db.String(50), nullable=False)
     reasoning = db.Column(db.Text, nullable=True)
     response_status = db.Column(db.String(20), nullable=True)
+    decline_count = db.Column(db.Integer, nullable=False, default=0)
 
     ticket = db.relationship("Ticket", back_populates="assignments")
     technician = db.relationship("Technician")
@@ -164,4 +172,5 @@ class TicketAssignment(db.Model):
             "technician": self.technician.to_dict() if self.technician else None,
             "reasoning": self.reasoning,
             "response_status": self.response_status,
+            "decline_count": self.decline_count,
         }

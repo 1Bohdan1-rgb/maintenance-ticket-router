@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аналітика — Maintenance Ticket Router</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: #f1f5f9;
+    color: #334155;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  @media (max-width: 700px) {
+    body { padding: 16px; }
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .subtitle {
+    margin: 0 0 28px;
+    color: #64748b;
+    font-size: 13px;
+  }
+  .subtitle a { color: #0ea5e9; }
+  .card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(51, 65, 85, 0.06);
+    padding: 20px 22px;
+  }
+  section { margin-bottom: 28px; }
+  section > h2 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin: 0 0 12px;
+  }
+
+  /* AI insights */
+  .insights-card {
+    background: linear-gradient(135deg, #334155, #0f172a);
+    border: none;
+    color: #f8fafc;
+  }
+  .insights-card h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: #f8fafc;
+  }
+  .insights-card .badge {
+    background: #0ea5e9;
+    color: #f8fafc;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .insights-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .insights-list li {
+    padding-left: 22px;
+    position: relative;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #e2e8f0;
+  }
+  .insights-list li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: #0ea5e9;
+    font-weight: 700;
+  }
+  .insights-empty { font-size: 13px; color: #94a3b8; font-style: italic; }
+
+  /* Stat cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+  @media (max-width: 800px) {
+    .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .stat-card .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #334155;
+  }
+  .stat-card .value .unit { font-size: 14px; font-weight: 600; color: #64748b; }
+  .stat-card .value .empty { font-size: 15px; color: #94a3b8; font-style: italic; font-weight: 400; }
+
+  /* Charts */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 800px) {
+    .chart-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  .chart-card h3 {
+    margin: 0 0 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+  }
+  .chart-wrap { position: relative; height: 240px; }
+  .chart-wrap.wide { height: 220px; }
+  .empty-chart { font-size: 13px; color: #94a3b8; font-style: italic; text-align: center; padding: 40px 0; }
+
+  nav.top-links { margin-bottom: 20px; font-size: 13px; }
+  nav.top-links a { color: #0ea5e9; text-decoration: none; font-weight: 600; }
+  nav.top-links a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <nav class="top-links"><a href="{{ url_for('tickets.dashboard_view') }}">← Панель заявок</a></nav>
+  <h1>Аналітика</h1>
+  <p class="subtitle">Агрегована статистика по всіх заявках. AI-інсайти оновлюються не частіше ніж раз на ~20&nbsp;хв.</p>
+
+  <section>
+    <div class="card insights-card">
+      <h2>✨ AI Insights <span class="badge">Claude</span></h2>
+      {% if insights %}
+      <ul class="insights-list">
+        {% for insight in insights %}
+        <li>{{ insight }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="insights-empty">Наразі особливих спостережень немає — або даних поки замало, або AI-аналіз тимчасово недоступний.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Ключові показники</h2>
+    <div class="stat-grid">
+      <div class="card stat-card">
+        <div class="label">Час до призначення</div>
+        <div class="value">
+          {% if stats.avg_time_to_assignment_minutes is not none %}
+            {{ stats.avg_time_to_assignment_minutes }}<span class="unit"> хв</span>
+          {% else %}
+            <span class="empty">немає даних</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Час до підтвердження</div>
+        <div class="value">
+          {% if stats.avg_time_to_confirmed_minutes is not none %}
+            {{ stats.avg_time_to_confirmed_minutes }}<span class="unit"> хв</span>
+          {% else %}
+            <span class="empty">немає даних</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Відхилень майстрами</div>
+        <div class="value">
+          {% if stats.decline_rate_percent is not none %}
+            {{ stats.decline_rate_percent }}<span class="unit">%</span>
+          {% else %}
+            <span class="empty">немає даних</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="label">Всього заявок</div>
+        <div class="value">{{ stats.total_tickets }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Графіки</h2>
+    <div class="chart-grid">
+      <div class="card chart-card">
+        <h3>Завантаженість майстрів</h3>
+        <div class="chart-wrap"><canvas id="chart-workload"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Заявки за категорією</h3>
+        <div class="chart-wrap"><canvas id="chart-category"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Заявки за пріоритетом</h3>
+        <div class="chart-wrap"><canvas id="chart-priority"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Заявки за серйозністю (severity)</h3>
+        <div class="chart-wrap"><canvas id="chart-severity"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card chart-card">
+      <h3>Тренд за останні 14 днів</h3>
+      <div class="chart-wrap wide"><canvas id="chart-trend"></canvas></div>
+    </div>
+  </section>
+
+<script>
+  const STATS = {{ stats | tojson }};
+
+  Chart.defaults.font.family = "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+  Chart.defaults.color = "#64748b";
+  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+  Chart.defaults.plugins.legend.labels.padding = 12;
+
+  function emptyState(canvasId, message) {
+    const canvas = document.getElementById(canvasId);
+    const wrap = canvas.parentElement;
+    canvas.remove();
+    const div = document.createElement("div");
+    div.className = "empty-chart";
+    div.textContent = message;
+    wrap.appendChild(div);
+  }
+
+  // --- Technician workload ---
+  (function () {
+    const rows = STATS.technician_workload || [];
+    if (!rows.length) { emptyState("chart-workload", "Ще немає зареєстрованих майстрів."); return; }
+    new Chart(document.getElementById("chart-workload"), {
+      type: "bar",
+      data: {
+        labels: rows.map(r => r.name),
+        datasets: [
+          { label: "Активні", data: rows.map(r => r.active), backgroundColor: "#0ea5e9", borderRadius: 4 },
+          { label: "Завершені", data: rows.map(r => r.completed), backgroundColor: "#94a3b8", borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { x: { stacked: false, grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } },
+        plugins: { legend: { position: "bottom" } },
+      },
+    });
+  })();
+
+  // --- Category distribution ---
+  (function () {
+    const entries = Object.entries(STATS.category_counts || {});
+    if (!entries.length) { emptyState("chart-category", "Ще немає заявок."); return; }
+    const palette = ["#0ea5e9", "#334155", "#0d9488", "#94a3b8", "#7dd3fc"];
+    new Chart(document.getElementById("chart-category"), {
+      type: "doughnut",
+      data: {
+        labels: entries.map(e => e[0]),
+        datasets: [{ data: entries.map(e => e[1]), backgroundColor: palette, borderWidth: 0 }],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } },
+    });
+  })();
+
+  // --- Priority distribution (semantic colors) ---
+  (function () {
+    const counts = STATS.priority_counts || {};
+    const order = ["low", "medium", "high", "emergency"];
+    const colors = { low: "#16a34a", medium: "#eab308", high: "#f97316", emergency: "#dc2626" };
+    const labels = order.filter(k => k in counts);
+    if (!labels.length || labels.every(k => !counts[k])) { emptyState("chart-priority", "Ще немає заявок."); return; }
+    new Chart(document.getElementById("chart-priority"), {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [{ data: labels.map(k => counts[k]), backgroundColor: labels.map(k => colors[k]), borderRadius: 4 }],
+      },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+  })();
+
+  // --- Severity distribution (semantic colors) ---
+  (function () {
+    const counts = STATS.severity_counts || {};
+    const order = ["1", "2", "3", "4", "5"];
+    const colors = { "1": "#16a34a", "2": "#16a34a", "3": "#eab308", "4": "#f97316", "5": "#dc2626" };
+    const total = order.reduce((sum, k) => sum + (counts[k] || 0), 0);
+    if (!total) { emptyState("chart-severity", "Ще немає оцінок серйозності."); return; }
+    new Chart(document.getElementById("chart-severity"), {
+      type: "bar",
+      data: {
+        labels: order.map(k => k + "/5"),
+        datasets: [{ data: order.map(k => counts[k] || 0), backgroundColor: order.map(k => colors[k]), borderRadius: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+  })();
+
+  // --- Trend ---
+  (function () {
+    const entries = Object.entries(STATS.trend || {});
+    if (!entries.length) { emptyState("chart-trend", "Немає даних за цей період."); return; }
+    new Chart(document.getElementById("chart-trend"), {
+      type: "line",
+      data: {
+        labels: entries.map(e => e[0].slice(5)),
+        datasets: [{
+          label: "Заявок",
+          data: entries.map(e => e[1]),
+          borderColor: "#0ea5e9",
+          backgroundColor: "rgba(14, 165, 233, 0.12)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+  })();
+</script>
+</body>
+</html>

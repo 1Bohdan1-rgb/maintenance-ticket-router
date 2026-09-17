@@ -5,11 +5,13 @@ import hmac
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from collections import OrderedDict
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, render_template, request, url_for
 
 from ai_classifier import classify_ticket
+from ai_insights import get_ai_insights
 from email_notifier import (
     send_completion_email,
     send_confirmation_email,
@@ -21,6 +23,7 @@ from models import (
     MATCH_PRIORITIES,
     MAX_PHOTO_BYTES,
     PRICE_TIERS,
+    PRIORITIES,
     SPECIALTIES,
     SPEED_RATINGS,
     STATUSES,
@@ -167,6 +170,108 @@ def _build_dashboard_stats():
         stats["avg_response_time"] = round(sum(response_times) / len(response_times), 1)
 
     return stats, tickets
+
+
+# Statuses counted as "active" workload for a technician on the analytics
+# page - i.e. work they currently have on their plate, as opposed to
+# "completed" (done) or a status that never had a technician attached.
+_ACTIVE_TECHNICIAN_STATUSES = {"assigned", "pending_technician_response", "confirmed", "in_progress"}
+_ANALYTICS_TREND_DAYS = 14
+
+
+def _build_analytics_stats():
+    """Aggregated, already-computed statistics for the /analytics page -
+    everything here is a count/average, never a raw ticket description or
+    customer contact, since this same dict is also what gets sent to
+    Claude for the AI Insights panel (see ai_insights.get_ai_insights).
+    """
+    tickets = Ticket.query.all()
+    technicians = Technician.query.order_by(Technician.name).all()
+    assignments = TicketAssignment.query.all()
+
+    # 1. Time to assignment / to confirmation. Sampled the same way as
+    # _build_dashboard_stats's avg_response_time: only tickets *currently*
+    # sitting in that status, since updated_at reflects the most recent
+    # change to the row, not specifically "when it became assigned" - a
+    # ticket that has since moved on (confirmed, completed, ...) would
+    # skew the average with unrelated later activity.
+    assignment_minutes = [
+        (t.updated_at - t.created_at).total_seconds() / 60
+        for t in tickets
+        if t.status == "assigned" and t.created_at and t.updated_at
+    ]
+    confirmed_minutes = [
+        (t.updated_at - t.created_at).total_seconds() / 60
+        for t in tickets
+        if t.status == "confirmed" and t.created_at and t.updated_at
+    ]
+
+    # 2. Per-technician workload.
+    workload_by_id = {
+        t.id: {"name": t.name, "specialty": t.specialty, "active": 0, "completed": 0}
+        for t in technicians
+    }
+    for a in assignments:
+        row = workload_by_id.get(a.technician_id)
+        if row is None:
+            continue
+        if a.ticket.status == "completed":
+            row["completed"] += 1
+        elif a.ticket.status in _ACTIVE_TECHNICIAN_STATUSES:
+            row["active"] += 1
+    technician_workload = sorted(workload_by_id.values(), key=lambda r: r["name"])
+
+    # 3 & 4. Category / priority / severity distribution.
+    category_counts = {}
+    priority_counts = {p: 0 for p in PRIORITIES}
+    severity_counts = {str(n): 0 for n in range(1, 6)}
+    for t in tickets:
+        if t.category:
+            category_counts[t.category] = category_counts.get(t.category, 0) + 1
+        if t.priority in priority_counts:
+            priority_counts[t.priority] += 1
+        if t.severity in range(1, 6):
+            severity_counts[str(t.severity)] += 1
+
+    # 5. Daily trend for the last _ANALYTICS_TREND_DAYS days.
+    today = datetime.now(timezone.utc).date()
+    trend = OrderedDict(
+        ((today - timedelta(days=i)).isoformat(), 0) for i in range(_ANALYTICS_TREND_DAYS - 1, -1, -1)
+    )
+    for t in tickets:
+        if t.created_at:
+            day = t.created_at.date().isoformat()
+            if day in trend:
+                trend[day] += 1
+
+    # 6. Decline rate - decline_count persists across reassignment (unlike
+    # response_status, which a successful reassignment overwrites back to
+    # "pending"), so this counts every decline that ever happened, not just
+    # ones that happened to end in an unfilled gap.
+    total_declines = sum(a.decline_count or 0 for a in assignments)
+    total_accepted = sum(1 for a in assignments if a.response_status == "accepted")
+    decline_sample_size = total_declines + total_accepted
+    decline_rate_percent = (
+        round(100 * total_declines / decline_sample_size, 1) if decline_sample_size else None
+    )
+
+    return {
+        "total_tickets": len(tickets),
+        "avg_time_to_assignment_minutes": (
+            round(sum(assignment_minutes) / len(assignment_minutes), 1) if assignment_minutes else None
+        ),
+        "avg_time_to_confirmed_minutes": (
+            round(sum(confirmed_minutes) / len(confirmed_minutes), 1) if confirmed_minutes else None
+        ),
+        "technician_workload": technician_workload,
+        "category_counts": category_counts,
+        "priority_counts": priority_counts,
+        "severity_counts": severity_counts,
+        "trend": trend,
+        "decline_count": total_declines,
+        "accepted_count": total_accepted,
+        "decline_rate_percent": decline_rate_percent,
+    }
 
 
 @bp.route("/tickets", methods=["POST"])
@@ -652,6 +757,7 @@ def _decline_and_reassign(ticket, assignment, declining_technician):
     """
     assignment.response_status = "declined"
     assignment.technician_id = None
+    assignment.decline_count = (assignment.decline_count or 0) + 1
 
     new_technician, reasoning = select_technician(
         ticket,
@@ -799,6 +905,14 @@ def dashboard_view():
         technicians=technicians,
         completed_tickets=completed_tickets,
     )
+
+
+@bp.route("/analytics", methods=["GET"])
+@require_admin_basic
+def analytics_view():
+    stats = _build_analytics_stats()
+    insights = get_ai_insights(stats)
+    return render_template("analytics.html", stats=stats, insights=insights)
 
 
 @bp.route("/tickets", methods=["GET"])
