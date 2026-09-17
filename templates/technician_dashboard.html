@@ -6,20 +6,23 @@
 <title>Мої заявки — Maintenance Ticket Router</title>
 <style>
   :root {
-    --bg-start: #f5efe6;
-    --bg-end: #ede3d3;
-    --card-bg: #fffdf9;
-    --card-border: #e8dcc8;
-    --field-bg: #faf5eb;
-    --field-border: #ddccb0;
-    --field-border-focus: #c1652f;
-    --text: #3a2e26;
-    --text-muted: #8a7761;
-    --accent: #c1652f;
-    --accent-hover: #a85426;
+    --bg-start: #eef2f7;
+    --bg-end: #e2e8f0;
+    --card-bg: #f8fafc;
+    --card-border: #e2e8f0;
+    --field-bg: #f1f5f9;
+    --field-border: #cbd5e1;
+    --field-border-focus: #0ea5e9;
+    --text: #334155;
+    --text-muted: #64748b;
+    --accent: #0ea5e9;
+    --accent-hover: #0284c7;
+    /* Semantic status/priority colors - intentionally untouched by the
+       slate/sky rebrand so emergency/high/medium/low stay recognizable. */
     --green: #5b7b4b;
     --red: #a63d2f;
     --gold: #c99a3b;
+    --orange: #c1652f;
   }
   * { box-sizing: border-box; }
   body {
@@ -37,7 +40,7 @@
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 18px;
-    box-shadow: 0 20px 45px rgba(58, 46, 38, 0.12);
+    box-shadow: 0 20px 45px rgba(51, 65, 85, 0.12);
     padding: 32px 28px;
   }
   h1 { font-size: 20px; margin: 0 0 4px; }
@@ -63,7 +66,7 @@
   input:focus { outline: none; border-color: var(--field-border-focus); }
   button {
     background: var(--accent);
-    color: #fff8f0;
+    color: #ffffff;
     border: none;
     border-radius: 10px;
     padding: 10px 16px;
@@ -113,12 +116,12 @@
     border-radius: 999px;
     font-size: 11px;
     font-weight: 700;
-    color: #fff8f0;
+    color: #ffffff;
     white-space: nowrap;
   }
   .badge-emergency { background: var(--red); }
-  .badge-high { background: var(--accent); }
-  .badge-medium { background: var(--gold); color: #3a2e26; }
+  .badge-high { background: var(--orange); }
+  .badge-medium { background: var(--gold); color: #334155; }
   .badge-low { background: var(--green); }
   .status-tag {
     font-size: 11px;
