@@ -67,7 +67,7 @@ class Ticket(db.Model):
     description = db.Column(db.Text, nullable=True)
     category = db.Column(db.String(50), nullable=True)
     priority = db.Column(db.String(20), nullable=True)
-    status = db.Column(db.String(20), nullable=False, default="new")
+    status = db.Column(db.String(40), nullable=False, default="new")
     customer_email = db.Column(db.String(255), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     urgency_reason = db.Column(db.Text, nullable=True)
