@@ -71,6 +71,8 @@ class Ticket(db.Model):
     customer_email = db.Column(db.String(255), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     urgency_reason = db.Column(db.Text, nullable=True)
+    severity = db.Column(db.Integer, nullable=True)
+    severity_reason = db.Column(db.Text, nullable=True)
     lang = db.Column(db.String(5), nullable=True, default="uk")
     match_priority = db.Column(db.String(20), nullable=True)
     preferred_gender = db.Column(db.String(20), nullable=True)
@@ -103,6 +105,8 @@ class Ticket(db.Model):
             "customer_email": self.customer_email,
             "customer_phone": self.customer_phone,
             "urgency_reason": self.urgency_reason,
+            "severity": self.severity,
+            "severity_reason": self.severity_reason,
             "match_priority": self.match_priority,
             "preferred_gender": self.preferred_gender,
             "assigned_to": self.assigned_to,

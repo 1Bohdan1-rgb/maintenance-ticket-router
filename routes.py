@@ -228,6 +228,8 @@ def create_ticket():
     ticket.category = classification["category"]
     ticket.priority = classification["priority"]
     ticket.urgency_reason = classification["urgency_reason"]
+    ticket.severity = classification["severity"]
+    ticket.severity_reason = classification["severity_reason"]
 
     team = select_technician_team(
         ticket, categories, match_priority=match_priority, preferred_gender=preferred_gender

@@ -288,6 +288,7 @@
           <th>Опис</th>
           <th>Категорія</th>
           <th>Пріоритет</th>
+          <th>Серйозність</th>
           <th>Статус</th>
           <th>Призначено</th>
         </tr>
@@ -310,6 +311,14 @@
           <td>
             {% if t.priority %}
             <span class="pill badge-{{ t.priority }}">{{ t.priority }}</span>
+            {% else %}
+            —
+            {% endif %}
+          </td>
+          <td>
+            {% if t.severity %}
+            {% set sev_class = "badge-emergency" if t.severity == 5 else ("badge-high" if t.severity == 4 else ("badge-medium" if t.severity == 3 else "badge-low")) %}
+            <span class="pill {{ sev_class }}"{% if t.severity_reason %} title="{{ t.severity_reason }}"{% endif %}>{{ t.severity }}/5</span>
             {% else %}
             —
             {% endif %}

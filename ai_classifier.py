@@ -16,7 +16,15 @@ FALLBACK_RESULT = {
     "categories": ["general"],
     "priority": "medium",
     "urgency_reason": "Не вдалося класифікувати автоматично, застосовано значення за замовчуванням.",
+    "severity": 3,
+    "severity_reason": "Не вдалося оцінити серйозність автоматично, застосовано середнє значення.",
 }
+
+# severity -> the minimum priority that severity level forces, regardless
+# of what the text description alone would otherwise suggest - a
+# deterministic backstop under the prompt's own instruction to Claude to
+# do the same, in case it doesn't.
+_SEVERITY_PRIORITY_FLOOR = {5: "emergency", 4: "high"}
 
 SYSTEM_PROMPT = """You are a triage dispatcher for a building maintenance service.
 Given the description of a maintenance issue, classify it.
@@ -24,7 +32,7 @@ Given the description of a maintenance issue, classify it.
 Respond with STRICT JSON only. No markdown, no code fences, no explanation
 before or after the JSON. Respond with exactly one JSON object of this shape:
 
-{"categories": ["plumbing|electrical|carpentry|general", "..."], "priority": "low|medium|high|emergency", "urgency_reason": "one short sentence"}
+{"categories": ["plumbing|electrical|carpentry|general", "..."], "priority": "low|medium|high|emergency", "urgency_reason": "one short sentence", "severity": 1-5, "severity_reason": "one short sentence"}
 
 Rules:
 - "categories" is a JSON array of one or more values, each exactly one of:
@@ -57,15 +65,43 @@ Rules:
   only when the issue poses an immediate safety or property risk (e.g. gas leak,
   active flooding, exposed live wiring, fire hazard).
 - "urgency_reason" is a single short sentence explaining the assigned priority.
+- "severity" is an integer from 1 to 5 rating the SCALE of physical damage
+  or disrepair - independent of "priority":
+    1 = cosmetic/trivial (a dripping tap, a loose handle, a small scuff)
+    2 = minor (one broken fixture, small superficial damage)
+    3 = moderate (a fixture failure affecting normal use, localized damage
+        - e.g. one water-stained ceiling tile, a cracked pane)
+    4 = major (significant damage, several affected fixtures/areas, or
+        damage likely to worsen without prompt repair - e.g. a bowing
+        ceiling, extensive water staining, a large structural crack)
+    5 = critical (structural failure, extensive destruction, or a
+        collapse/major property-loss risk - e.g. a caved-in ceiling,
+        widespread flooding, charred structural members)
+  "priority" is about how urgently/safely someone must respond (a small gas
+  smell is high priority for safety even with no visible damage yet);
+  "severity" is purely about how much physical damage/disrepair already
+  exists. They usually move together but not always - keep them independent.
+  If "severity" is 5, "priority" must be "emergency". If "severity" is 4,
+  "priority" must be at least "high". A large-scale physical problem is
+  urgent even when the text description undersells it - reflect that
+  reasoning in "urgency_reason".
+- "severity_reason" is a single short sentence justifying the severity
+  score, in the same language as the description. If a photo is attached,
+  base it primarily on what's visible - the materials affected, the
+  extent/area of the damage, and how far the deterioration has progressed;
+  otherwise infer it from the text description alone.
 - The description may be in Ukrainian, English, or any other language - classify
-  it regardless of language, and write "urgency_reason" in the same language as
-  the description.
+  it regardless of language, and write "urgency_reason" and "severity_reason" in
+  the same language as the description.
 - A photo of the problem may be attached. Use it as additional visual
   evidence alongside the text - e.g. visibly exposed/scorched wiring
   implies electrical, a visible pipe leak or water pooling implies
   plumbing, damaged wood/drywall/framing implies carpentry - even if the
   text description doesn't mention it. If the photo and text point to
-  different trades, include both in "categories".
+  different trades, include both in "categories". The photo is also your
+  primary evidence for "severity" - a photo showing more extensive damage
+  than the text implies should push severity (and therefore priority)
+  higher.
 """
 
 
@@ -89,12 +125,19 @@ def classify_ticket(description: str, photo_data: str = None, photo_content_type
     `description` is empty.
 
     Always returns a dict with "category" (str), "categories" (list of str,
-    always at least one element), "priority", and "urgency_reason".
-    "category" is always categories[0] - kept for callers that only need a
-    single value, so behavior is unchanged whenever Claude (or the fallback)
-    returns exactly one category. Falls back to categories=["general"],
-    priority="medium" on any failure (missing API key, network/API error, or
-    an unparsable/invalid response).
+    always at least one element), "priority", "urgency_reason", "severity"
+    (int, 1-5 - the scale of physical damage/disrepair, independent of how
+    urgently it needs a response) and "severity_reason". "category" is
+    always categories[0] - kept for callers that only need a single value,
+    so behavior is unchanged whenever Claude (or the fallback) returns
+    exactly one category. A severity of 4 or 5 forces "priority" up to at
+    least "high"/"emergency" respectively, even if Claude's own priority
+    call (or the text alone) undersold it - see _SEVERITY_PRIORITY_FLOOR.
+    Falls back to categories=["general"], priority="medium", severity=3 on
+    any failure (missing API key, network/API error, or an
+    unparsable/invalid response); an invalid severity alone (valid
+    category/priority) falls back to severity=3 without discarding the
+    rest of the classification.
     """
     has_text = bool(description and description.strip())
     has_photo = bool(photo_data and photo_content_type)
@@ -160,6 +203,8 @@ def classify_ticket(description: str, photo_data: str = None, photo_content_type
     categories_raw = result.get("categories")
     priority = result.get("priority")
     urgency_reason = result.get("urgency_reason") or ""
+    severity_raw = result.get("severity")
+    severity_reason = result.get("severity_reason") or ""
 
     categories = []
     if isinstance(categories_raw, list):
@@ -171,9 +216,24 @@ def classify_ticket(description: str, photo_data: str = None, photo_content_type
         logger.warning("Claude returned invalid categories/priority: %r", result)
         return dict(FALLBACK_RESULT)
 
+    # severity is validated separately from categories/priority and falls
+    # back to the neutral default (3) rather than discarding an otherwise
+    # valid classification - an AI hiccup on this one field shouldn't nuke
+    # a perfectly good category/priority call.
+    severity = severity_raw if isinstance(severity_raw, int) and 1 <= severity_raw <= 5 else 3
+    if severity != severity_raw:
+        logger.warning("Claude returned invalid severity: %r; defaulting to 3", severity_raw)
+        severity_reason = severity_reason or FALLBACK_RESULT["severity_reason"]
+
+    floor = _SEVERITY_PRIORITY_FLOOR.get(severity)
+    if floor and PRIORITIES.index(floor) > PRIORITIES.index(priority):
+        priority = floor
+
     return {
         "category": categories[0],
         "categories": categories,
         "priority": priority,
         "urgency_reason": urgency_reason,
+        "severity": severity,
+        "severity_reason": severity_reason,
     }
