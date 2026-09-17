@@ -36,6 +36,17 @@ def test_valid_response_is_parsed(monkeypatch):
     assert result["priority"] == "high"
 
 
+def test_system_prompt_documents_unrelated_symptom_splitting():
+    # Regression check for the "boiler + mold" bug: the prompt must keep
+    # explicit guidance that unrelated symptoms bundled in one request are
+    # separate categories, and that mold/dampness defaults to "general"
+    # rather than being folded into whatever trade the other symptom needs.
+    prompt = ai_classifier.SYSTEM_PROMPT
+    assert "mold" in prompt.lower()
+    assert "general" in prompt.lower()
+    assert "unrelated" in prompt.lower()
+
+
 def test_invalid_category_in_response_falls_back(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key")
     fake_text = json.dumps({"categories": ["not-a-real-category"], "priority": "high"})

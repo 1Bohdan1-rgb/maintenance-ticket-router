@@ -29,13 +29,28 @@ before or after the JSON. Respond with exactly one JSON object of this shape:
 Rules:
 - "categories" is a JSON array of one or more values, each exactly one of:
   plumbing, electrical, carpentry, general.
-- Almost every request needs exactly one category - use a single-element
-  array by default. Only include more than one category when the
-  description clearly and explicitly requires multiple distinct trades to
-  work on genuinely separate parts of the problem - e.g. "the ceiling
-  collapsed, exposing wiring and a burst pipe" needs carpentry, electrical,
-  AND plumbing. Do not split an ordinary single-trade job into multiple
-  categories just because it touches more than one fixture.
+- Decide how many categories by asking: would ONE specialist, in ONE visit,
+  plausibly address every symptom described? If yes, use a single-element
+  array. If any symptom has a genuinely different underlying cause that
+  specialist wouldn't touch, add a category for it too - even though it was
+  reported in the same request.
+  - A single root cause with a secondary symptom is usually ONE problem
+    needing MULTIPLE trades on-site together: "the ceiling collapsed,
+    exposing wiring and a burst pipe" needs carpentry, electrical, AND
+    plumbing, because fixing the collapse itself requires all three.
+  - Unrelated problems bundled into one request are SEPARATE problems even
+    when only one of them is a clean trade match: "the boiler stopped
+    heating water, and there's mold on the bedroom walls" needs plumbing
+    (the boiler) AND general (the mold) - a plumber fixing the boiler does
+    nothing about mold, which is usually a ventilation/humidity issue
+    unrelated to the boiler, not a plumbing repair.
+  - Mold, damp patches, condensation, or a musty smell are "general" by
+    default - only call them "plumbing" or "carpentry" if the request
+    itself also describes the actual leak/burst pipe/roof damage causing
+    them. Don't fold them into whatever trade the *other* symptom needs
+    just because dampness sounds water-related.
+  Do not split an ordinary single-trade job into multiple categories just
+  because it touches more than one fixture.
 - List "categories" in order of how urgent/primary each trade is to the
   described problem.
 - "priority" must be exactly one of: low, medium, high, emergency. Use "emergency"
