@@ -263,12 +263,17 @@ def _select_with_claude(ticket, candidates, stats_by_id, specialty, match_priori
     return chosen, reasoning
 
 
-def select_technician(ticket, match_priority="quality", specialty=None, preferred_gender=None):
+def select_technician(ticket, match_priority="quality", specialty=None, preferred_gender=None, exclude_ids=None):
     """Pick the best available technician for `ticket` in one specialty.
 
     `specialty` defaults to `ticket.category` (the ticket's primary/only
     specialty) - pass it explicitly to match a specific discipline on a
     multi-discipline ticket (see select_technician_team).
+
+    `exclude_ids` (an iterable of technician ids, or None) removes those
+    candidates from the pool entirely before anything else runs - used when
+    re-picking after a technician declines their assignment, so they can't
+    just be handed straight back the same ticket.
 
     `match_priority` is the client's stated preference - "quality" (default),
     "speed", or "price". Whenever Claude gets to weigh in, it sees the full
@@ -300,6 +305,9 @@ def select_technician(ticket, match_priority="quality", specialty=None, preferre
     """
     specialty = specialty or ticket.category
     candidates = Technician.query.filter_by(specialty=specialty, available=True).all()
+
+    if exclude_ids:
+        candidates = [c for c in candidates if c.id not in exclude_ids]
 
     if not candidates:
         return None, None

@@ -184,6 +184,20 @@
               {% else %}
               <div class="review-preview">Клієнт ще не залишив відгук.</div>
               {% endif %}
+            {% elif ticket.status == "pending_technician_response" and ticket.my_response_status == "pending" %}
+              <span class="status-tag">Очікує вашої відповіді</span>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <form method="post" action="{{ url_for('tickets.technician_respond_ticket', ticket_id=ticket.id) }}">
+                  <input type="hidden" name="email" value="{{ email }}">
+                  <input type="hidden" name="response" value="accept">
+                  <button type="submit">Прийняти</button>
+                </form>
+                <form method="post" action="{{ url_for('tickets.technician_respond_ticket', ticket_id=ticket.id) }}">
+                  <input type="hidden" name="email" value="{{ email }}">
+                  <input type="hidden" name="response" value="decline">
+                  <button type="submit" style="background: var(--red);">Відхилити</button>
+                </form>
+              </div>
             {% else %}
               <span class="status-tag">Статус: {{ ticket.status }}</span>
               <form method="post" action="{{ url_for('tickets.technician_complete_ticket', ticket_id=ticket.id) }}" style="margin-top:10px;">

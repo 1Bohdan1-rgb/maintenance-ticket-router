@@ -318,7 +318,7 @@
           <td>
             {% if t.assignments %}
               {% for a in t.assignments %}
-              <div{% if a.reasoning %} title="{{ a.reasoning }}"{% endif %}>{{ a.specialty }}: {{ a.technician.name if a.technician else "—" }}</div>
+              <div{% if a.reasoning %} title="{{ a.reasoning }}"{% endif %}>{{ a.specialty }}: {{ a.technician.name if a.technician else "—" }}{% if a.response_status == "pending" %} <span class="pill badge-medium">очікує відповіді</span>{% endif %}</div>
               {% endfor %}
             {% else %}
               {{ t.assignee.name if t.assignee else "—" }}

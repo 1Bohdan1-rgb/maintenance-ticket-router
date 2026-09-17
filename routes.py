@@ -134,7 +134,7 @@ def _parse_photo_data_uri(data_uri):
 
 DASHBOARD_CATEGORIES = ("plumbing", "electrical", "carpentry", "general")
 DASHBOARD_PRIORITIES = ("low", "medium", "high", "emergency")
-DASHBOARD_STATUSES = ("new", "assigned", "pending_assignment")
+DASHBOARD_STATUSES = ("new", "assigned", "pending_assignment", "pending_technician_response")
 
 
 def _build_dashboard_stats():
@@ -274,7 +274,7 @@ def confirm_ticket(ticket_id):
     if ticket is None:
         return jsonify({"error": "ticket not found"}), 404
 
-    if ticket.status != "confirmed":
+    if ticket.status not in ("pending_technician_response", "confirmed"):
         technicians = []
         seen_ids = set()
         for assignment in ticket.assignments:
@@ -293,7 +293,20 @@ def confirm_ticket(ticket_id):
                 logger.exception(
                     "Не вдалося надіслати email майстру %s для заявки #%s", technician.id, ticket.id
                 )
-        ticket.status = "confirmed"
+
+        if technicians:
+            # Wait for each notified technician to accept/decline (see
+            # technician_respond_ticket) before treating the ticket as
+            # truly confirmed - only assignment rows with a technician are
+            # marked "pending"; an unfilled specialty stays untouched.
+            for assignment in ticket.assignments:
+                if assignment.technician_id is not None:
+                    assignment.response_status = "pending"
+            ticket.status = "pending_technician_response"
+        else:
+            # Nothing to wait for - matches the pre-existing behavior for
+            # an entirely unassigned ticket.
+            ticket.status = "confirmed"
         db.session.commit()
 
     return jsonify(ticket.to_dict(include_assignee=True))
@@ -534,7 +547,7 @@ def _technician_tickets(technician):
     assigned_ticket_ids = db.session.query(TicketAssignment.ticket_id).filter(
         TicketAssignment.technician_id == technician.id
     )
-    return (
+    tickets = (
         Ticket.query.filter(
             db.or_(Ticket.assigned_to == technician.id, Ticket.id.in_(assigned_ticket_ids))
         )
@@ -542,6 +555,13 @@ def _technician_tickets(technician):
         .limit(20)
         .all()
     )
+    # Not persisted - just lets the template know, per ticket, whether
+    # *this* technician's own assignment row is still awaiting their
+    # accept/decline response.
+    for ticket in tickets:
+        my_assignment = next((a for a in ticket.assignments if a.technician_id == technician.id), None)
+        ticket.my_response_status = my_assignment.response_status if my_assignment else None
+    return tickets
 
 
 @bp.route("/technician/dashboard", methods=["GET"])
@@ -580,6 +600,8 @@ def technician_complete_ticket(ticket_id):
         error = "Майстра з таким email не знайдено."
     elif ticket is None or not _ticket_has_technician(ticket, technician):
         error = "Заявку не знайдено або вона не призначена вам."
+    elif ticket.status == "pending_technician_response":
+        error = "Спершу прийміть заявку, перш ніж позначати її виконаною."
     elif ticket.status != "completed":
         ticket.status = "completed"
         ticket.completed_at = datetime.now(timezone.utc)
@@ -596,6 +618,109 @@ def technician_complete_ticket(ticket_id):
                 logger.exception(
                     "Не вдалося надіслати email про завершення заявки #%s", ticket.id
                 )
+
+    tickets = _technician_tickets(technician) if technician else []
+    return render_template(
+        "technician_dashboard.html", email=email, technician=technician, tickets=tickets, error=error
+    )
+
+
+def _maybe_confirm_ticket(ticket):
+    """Flips a ticket from pending_technician_response to confirmed once
+    every assignment row that currently has a technician has accepted - a
+    specialty with no technician at all (a gap) doesn't block this, same
+    as it doesn't block the initial "assigned" status at creation time.
+    """
+    if ticket.status != "pending_technician_response":
+        return
+    still_waiting = any(
+        a.technician_id is not None and a.response_status != "accepted" for a in ticket.assignments
+    )
+    if not still_waiting:
+        ticket.status = "confirmed"
+
+
+def _decline_and_reassign(ticket, assignment, declining_technician):
+    """Handles one technician declining their assignment: reopens that
+    specialty's slot and immediately retries select_technician(), excluding
+    the technician who just declined so they can't be handed the same
+    ticket right back. Mirrors /admin/reassign-pending's fill-a-gap logic,
+    but for a slot that had a technician who said no rather than one that
+    started out empty.
+    """
+    assignment.response_status = "declined"
+    assignment.technician_id = None
+
+    new_technician, reasoning = select_technician(
+        ticket,
+        match_priority=ticket.match_priority or "quality",
+        specialty=assignment.specialty,
+        preferred_gender=ticket.preferred_gender,
+        exclude_ids={declining_technician.id},
+    )
+
+    was_primary = ticket.assigned_to == declining_technician.id
+
+    if new_technician is None:
+        if was_primary:
+            ticket.assigned_to = None
+            ticket.assignment_reasoning = None
+        if not any(a.technician_id for a in ticket.assignments):
+            ticket.status = "pending_assignment"
+        return
+
+    assignment.technician_id = new_technician.id
+    assignment.reasoning = reasoning
+    assignment.response_status = "pending"
+
+    if was_primary:
+        ticket.assigned_to = new_technician.id
+        ticket.assignment_reasoning = reasoning
+
+    try:
+        send_technician_notification(ticket, new_technician)
+    except Exception:
+        logger.exception(
+            "Не вдалося надіслати email майстру %s для заявки #%s", new_technician.id, ticket.id
+        )
+
+
+@bp.route("/technician/tickets/<int:ticket_id>/respond", methods=["POST"])
+def technician_respond_ticket(ticket_id):
+    """A technician accepts or declines a ticket they were assigned, once
+    the customer has confirmed it (ticket.status ==
+    "pending_technician_response"). Declining immediately retries
+    assignment for that specialty via _decline_and_reassign, so the ticket
+    moves on to the next candidate instead of just sitting there.
+    """
+    email = (request.form.get("email") or "").strip()
+    response = (request.form.get("response") or "").strip()
+    technician = _find_technician_by_email(email)
+    ticket = Ticket.query.get(ticket_id)
+    error = None
+
+    if technician is None:
+        error = "Майстра з таким email не знайдено."
+    elif ticket is None:
+        error = "Заявку не знайдено."
+    elif response not in ("accept", "decline"):
+        error = "Некоректна відповідь."
+    else:
+        my_pending = [
+            a for a in ticket.assignments
+            if a.technician_id == technician.id and a.response_status == "pending"
+        ]
+        if not my_pending:
+            error = "Ця заявка не очікує на вашу відповідь."
+        elif response == "accept":
+            for assignment in my_pending:
+                assignment.response_status = "accepted"
+            _maybe_confirm_ticket(ticket)
+            db.session.commit()
+        else:
+            for assignment in my_pending:
+                _decline_and_reassign(ticket, assignment, technician)
+            db.session.commit()
 
     tickets = _technician_tickets(technician) if technician else []
     return render_template(

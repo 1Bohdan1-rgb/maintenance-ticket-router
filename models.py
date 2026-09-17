@@ -7,7 +7,17 @@ db = SQLAlchemy()
 SPECIALTIES = ("plumbing", "electrical", "carpentry", "general")
 CATEGORIES = ("plumbing", "electrical", "carpentry", "general", "other")
 PRIORITIES = ("low", "medium", "high", "emergency")
-STATUSES = ("new", "pending_assignment", "assigned", "confirmed", "completed", "in_progress", "resolved", "closed")
+STATUSES = (
+    "new",
+    "pending_assignment",
+    "assigned",
+    "pending_technician_response",
+    "confirmed",
+    "completed",
+    "in_progress",
+    "resolved",
+    "closed",
+)
 PRICE_TIERS = ("budget", "mid", "premium")
 SPEED_RATINGS = ("fast", "medium", "slow")
 MATCH_PRIORITIES = ("quality", "speed", "price")
@@ -122,6 +132,14 @@ class TicketAssignment(db.Model):
     ("the ceiling collapsed" -> carpentry + electrical + plumbing) gets one
     row per specialty, each independently matched. `technician_id` is NULL
     when no available technician could be found for that specialty.
+
+    `response_status` tracks whether the assigned technician has responded
+    to the ticket once the customer confirms it (see Ticket.status ==
+    "pending_technician_response"): None before that point (or for a row
+    with no technician), "pending" while awaiting their response,
+    "accepted", or transiently "declined" right before the row is either
+    reassigned to a new candidate (back to "pending") or left as a gap
+    (technician_id reset to NULL) if none is available.
     """
 
     __tablename__ = "ticket_assignments"
@@ -131,6 +149,7 @@ class TicketAssignment(db.Model):
     technician_id = db.Column(db.Integer, db.ForeignKey("technicians.id"), nullable=True)
     specialty = db.Column(db.String(50), nullable=False)
     reasoning = db.Column(db.Text, nullable=True)
+    response_status = db.Column(db.String(20), nullable=True)
 
     ticket = db.relationship("Ticket", back_populates="assignments")
     technician = db.relationship("Technician")
@@ -140,4 +159,5 @@ class TicketAssignment(db.Model):
             "specialty": self.specialty,
             "technician": self.technician.to_dict() if self.technician else None,
             "reasoning": self.reasoning,
+            "response_status": self.response_status,
         }
