@@ -4,12 +4,33 @@ AI-powered triage and dispatch for building maintenance requests. A client descr
 
 **Live demo:** [maintenance-ticket-router.onrender.com](https://maintenance-ticket-router.onrender.com)
 
-![Demo: submitting a ticket through AI classification to technician assignment](docs/demo.gif)
+<table>
+<tr>
+<td width="33%">
 
-> **Screenshot/GIF placeholder** — `docs/demo.gif` doesn't exist yet. Record the flow below and drop it at that path (or swap the line above for a static PNG):
-> 1. Open the client form, fill in a description (ideally one that triggers multi-discipline routing, e.g. *"the ceiling collapsed, exposing wiring and a burst pipe"*), optionally attach a photo.
-> 2. Submit — capture the result panel showing the AI-assigned category, priority, severity, and technician(s).
-> 3. Open `/dashboard/view` and capture the same ticket in the table, showing the severity badge and assignment reasoning tooltip.
+**1. Client submits a ticket**
+
+<img src="docs/01-client-form.png" alt="Client form filled in with a plumbing problem description, contact info, and match priority">
+
+</td>
+<td width="33%">
+
+**2. AI classifies it instantly**
+
+<img src="docs/02-ai-classification-result.png" alt="Result panel showing AI-assigned category, priority, and reasoning, with an assigned technician">
+
+</td>
+<td width="33%">
+
+**3. Dashboard shows the assignment**
+
+<img src="docs/03-dashboard-assignment.png" alt="Business dashboard table row showing category, priority, severity score, and the assigned technician">
+
+</td>
+</tr>
+</table>
+
+*Screenshots captured live against the deployed demo. A short GIF of the same flow would be a nice addition — none exists yet; drop one at `docs/demo.gif` and reference it above if you record one.*
 
 ## Key Features
 
