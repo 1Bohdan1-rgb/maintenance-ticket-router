@@ -487,6 +487,14 @@
           </div>
 
           <div class="field">
+            <label class="field-label" data-i18n="address_label">{{ t.address_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">📍</span>
+              <input type="text" id="customer_address" data-i18n-placeholder="address_placeholder" placeholder="{{ t.address_placeholder }}">
+            </div>
+          </div>
+
+          <div class="field">
             <label class="field-label" data-i18n="match_priority_label">{{ t.match_priority_label }}</label>
             <div class="field-icon-wrap">
               <span class="field-icon">🎯</span>
@@ -624,6 +632,22 @@
                 <option value="male" data-i18n-group="gender_names" data-i18n-option="male"></option>
                 <option value="female" data-i18n-group="gender_names" data-i18n-option="female"></option>
               </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="tech_location_label">{{ t.tech_location_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">📍</span>
+              <input type="text" id="tech_location" data-i18n-placeholder="tech_location_placeholder" placeholder="{{ t.tech_location_placeholder }}">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" data-i18n="tech_radius_label">{{ t.tech_radius_label }}</label>
+            <div class="field-icon-wrap">
+              <span class="field-icon">🧭</span>
+              <input type="number" min="1" step="1" id="tech_radius" data-i18n-placeholder="tech_radius_placeholder" placeholder="{{ t.tech_radius_placeholder }}">
             </div>
           </div>
 
@@ -840,6 +864,7 @@
     const description = document.getElementById('description').value.trim();
     const email = document.getElementById('customer_email').value.trim();
     const phone = document.getElementById('customer_phone').value.trim();
+    const address = document.getElementById('customer_address').value.trim();
     const matchPriority = document.getElementById('match_priority').value;
     const genderPreference = document.getElementById('gender_preference').value;
 
@@ -871,6 +896,7 @@
           description: description,
           customer_email: email || undefined,
           customer_phone: phone || undefined,
+          customer_address: address || undefined,
           match_priority: matchPriority,
           preferred_gender: genderPreference || undefined,
           photo: photoDataUri || undefined,
@@ -928,6 +954,8 @@
     const priceTier = document.getElementById('tech_price_tier').value;
     const speedRating = document.getElementById('tech_speed_rating').value;
     const gender = document.getElementById('tech_gender').value;
+    const location = document.getElementById('tech_location').value.trim();
+    const radius = document.getElementById('tech_radius').value.trim();
 
     techErrorEl.classList.add('hidden');
     techResult.classList.add('hidden');
@@ -953,6 +981,8 @@
           price_tier: priceTier || undefined,
           speed_rating: speedRating || undefined,
           gender: gender || undefined,
+          location: location || undefined,
+          service_radius_km: radius || undefined,
           lang: currentLang,
         }),
       });

@@ -139,6 +139,24 @@
     padding-top: 8px;
   }
   .empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px 0; }
+  .section-heading {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 28px 0 12px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--field-border);
+  }
+  .section-hint { font-size: 12px; color: var(--text-muted); margin: -8px 0 12px; }
+  .distance-pill {
+    display: inline-block;
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent-hover);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -214,6 +232,33 @@
           <div class="empty">Заявок, призначених вам, поки немає.</div>
         {% endif %}
       </div>
+
+      <div class="section-heading">Доступні заявки у вашій зоні</div>
+      {% if not technician.service_radius_km %}
+        <p class="section-hint">Вкажіть базову локацію та радіус роботи в профілі майстра, щоб бачити тут заявки поблизу.</p>
+      {% elif zone_assignments %}
+        <p class="section-hint">Відкриті заявки за вашою спеціальністю («{{ technician.specialty }}») у радіусі {{ technician.service_radius_km|round(0, 'floor')|int }} км від {{ technician.location_label }}.</p>
+        <div class="tickets">
+          {% for assignment, distance_km in zone_assignments %}
+          {% set ticket = assignment.ticket %}
+          <div class="ticket-card">
+            <div class="ticket-top">
+              <div class="ticket-title">#{{ ticket.id }} {{ ticket.title }}</div>
+              <span class="distance-pill">~{{ distance_km }} км</span>
+            </div>
+            <div class="ticket-meta">{{ ticket.description or "—" }}</div>
+            {% if ticket.customer_address %}<div class="ticket-meta">📍 {{ ticket.customer_address }}</div>{% endif %}
+            {% if ticket.priority %}<span class="pill badge-{{ ticket.priority }}">{{ ticket.priority }}</span>{% endif %}
+            <form method="post" action="{{ url_for('tickets.technician_claim_assignment', assignment_id=assignment.id) }}" style="margin-top:10px;">
+              <input type="hidden" name="email" value="{{ email }}">
+              <button type="submit">Взяти заявку</button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty">У вашій зоні поки немає доступних заявок.</div>
+      {% endif %}
       {% endif %}
     </div>
   </div>

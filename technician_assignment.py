@@ -5,6 +5,7 @@ import os
 import anthropic
 
 from ai_classifier import MODEL, _extract_json
+from geocoding import haversine_km
 from models import Technician, Ticket
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,31 @@ def _filter_by_gender_preference(candidates, preferred_gender):
     return matching if matching else candidates
 
 
+def _filter_by_service_area(candidates, ticket):
+    """Narrow candidates to those whose service radius covers the ticket's
+    (geocoded) address, if the ticket has coordinates on file at all.
+
+    Never blocks assignment, same non-blocking pattern as
+    _filter_by_gender_preference: a candidate with no location/radius set
+    is simply not "in range" and drops out of consideration whenever at
+    least one other candidate is, but if the ticket has no coordinates, or
+    none of the candidates would qualify, the original list is returned
+    unfiltered rather than leaving the ticket unassigned.
+    """
+    if ticket.customer_lat is None or ticket.customer_lng is None:
+        return candidates
+
+    in_range = [
+        c
+        for c in candidates
+        if c.lat is not None
+        and c.lng is not None
+        and c.service_radius_km is not None
+        and haversine_km(ticket.customer_lat, ticket.customer_lng, c.lat, c.lng) <= c.service_radius_km
+    ]
+    return in_range if in_range else candidates
+
+
 def _pick_best_by_rating(candidates, stats_by_id):
     def sort_key(technician):
         stats = stats_by_id[technician.id]
@@ -290,6 +316,11 @@ def select_technician(ticket, match_priority="quality", specialty=None, preferre
     _filter_by_gender_preference) - an unmet preference never leaves the
     ticket unassigned.
 
+    When the ticket has a geocoded address, candidates are also narrowed to
+    those whose service radius covers it (see _filter_by_service_area) -
+    same non-blocking fallback: a ticket or candidate with no coordinates
+    on file just doesn't participate in the distance narrowing.
+
     Returns (technician_or_None, reasoning_or_None):
     - No matching/available technician: (None, None).
     - Exactly one candidate (before or after gender narrowing): assigned
@@ -316,6 +347,11 @@ def select_technician(ticket, match_priority="quality", specialty=None, preferre
         return candidates[0], None
 
     candidates = _filter_by_gender_preference(candidates, preferred_gender)
+
+    if len(candidates) == 1:
+        return candidates[0], None
+
+    candidates = _filter_by_service_area(candidates, ticket)
 
     if len(candidates) == 1:
         return candidates[0], None

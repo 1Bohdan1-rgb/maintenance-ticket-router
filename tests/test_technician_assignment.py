@@ -64,6 +64,80 @@ def test_gender_preference_filters_candidates(ctx):
     assert technician.name == "Female Tech"
 
 
+KYIV = (50.4501, 30.5234)
+LVIV = (49.8397, 24.0297)
+
+
+def test_filter_by_service_area_narrows_to_technicians_in_range(ctx):
+    near = Technician(name="Near", specialty="plumbing", lat=KYIV[0], lng=KYIV[1], service_radius_km=10)
+    far = Technician(name="Far", specialty="plumbing", lat=LVIV[0], lng=LVIV[1], service_radius_km=10)
+    ticket = Ticket(title="x", customer_lat=KYIV[0], customer_lng=KYIV[1])
+
+    result = technician_assignment._filter_by_service_area([near, far], ticket)
+
+    assert result == [near]
+
+
+def test_filter_by_service_area_returns_original_when_ticket_has_no_coordinates(ctx):
+    near = Technician(name="Near", specialty="plumbing", lat=KYIV[0], lng=KYIV[1], service_radius_km=10)
+    ticket = Ticket(title="x")
+
+    result = technician_assignment._filter_by_service_area([near], ticket)
+
+    assert result == [near]
+
+
+def test_filter_by_service_area_falls_back_when_nobody_in_range(ctx):
+    far = Technician(name="Far", specialty="plumbing", lat=LVIV[0], lng=LVIV[1], service_radius_km=1)
+    no_coords = Technician(name="NoCoords", specialty="plumbing")
+    ticket = Ticket(title="x", customer_lat=KYIV[0], customer_lng=KYIV[1])
+    candidates = [far, no_coords]
+
+    result = technician_assignment._filter_by_service_area(candidates, ticket)
+
+    assert result == candidates
+
+
+def test_select_technician_prefers_candidate_within_radius(ctx):
+    # Seeded technicians already include one plumbing candidate (Oksana,
+    # no coordinates on file) - she must lose out to a candidate whose
+    # service radius actually covers the ticket's address.
+    near = Technician(name="Near Nick", specialty="plumbing", available=True,
+                       lat=KYIV[0], lng=KYIV[1], service_radius_km=10)
+    far = Technician(name="Far Fred", specialty="plumbing", available=True,
+                      lat=LVIV[0], lng=LVIV[1], service_radius_km=10)
+    db.session.add_all([near, far])
+    db.session.commit()
+
+    ticket = _make_ticket()
+    ticket.customer_lat, ticket.customer_lng = KYIV
+    db.session.commit()
+
+    technician, _ = technician_assignment.select_technician(ticket, specialty="plumbing")
+
+    assert technician.name == "Near Nick"
+
+
+def test_select_technician_falls_back_to_full_pool_when_nobody_in_range(ctx):
+    far1 = Technician(name="Far One", specialty="plumbing", available=True,
+                       lat=LVIV[0], lng=LVIV[1], service_radius_km=5)
+    far2 = Technician(name="Far Two", specialty="plumbing", available=True,
+                       lat=LVIV[0] + 1, lng=LVIV[1] + 1, service_radius_km=5)
+    db.session.add_all([far1, far2])
+    db.session.commit()
+
+    ticket = _make_ticket()
+    ticket.customer_lat, ticket.customer_lng = KYIV
+    db.session.commit()
+
+    # Nobody's radius covers the ticket - must still assign someone rather
+    # than leaving the ticket unassigned.
+    technician, _ = technician_assignment.select_technician(ticket, specialty="plumbing")
+
+    assert technician is not None
+    assert technician.name in {"Oksana Melnyk", "Far One", "Far Two"}
+
+
 def test_claude_selection_uses_mocked_response(ctx, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key")
 

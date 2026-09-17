@@ -44,6 +44,10 @@ class Technician(db.Model):
     price_tier = db.Column(db.String(20), nullable=True)
     speed_rating = db.Column(db.String(20), nullable=True)
     gender = db.Column(db.String(20), nullable=True)
+    location_label = db.Column(db.String(200), nullable=True)
+    lat = db.Column(db.Float, nullable=True)
+    lng = db.Column(db.Float, nullable=True)
+    service_radius_km = db.Column(db.Float, nullable=True)
 
     tickets = db.relationship("Ticket", back_populates="assignee")
 
@@ -56,6 +60,8 @@ class Technician(db.Model):
             "price_tier": self.price_tier,
             "speed_rating": self.speed_rating,
             "gender": self.gender,
+            "location_label": self.location_label,
+            "service_radius_km": self.service_radius_km,
         }
 
 
@@ -70,6 +76,9 @@ class Ticket(db.Model):
     status = db.Column(db.String(40), nullable=False, default="new")
     customer_email = db.Column(db.String(255), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
+    customer_address = db.Column(db.String(500), nullable=True)
+    customer_lat = db.Column(db.Float, nullable=True)
+    customer_lng = db.Column(db.Float, nullable=True)
     urgency_reason = db.Column(db.Text, nullable=True)
     severity = db.Column(db.Integer, nullable=True)
     severity_reason = db.Column(db.Text, nullable=True)
@@ -104,6 +113,7 @@ class Ticket(db.Model):
             "status": self.status,
             "customer_email": self.customer_email,
             "customer_phone": self.customer_phone,
+            "customer_address": self.customer_address,
             "urgency_reason": self.urgency_reason,
             "severity": self.severity,
             "severity_reason": self.severity_reason,

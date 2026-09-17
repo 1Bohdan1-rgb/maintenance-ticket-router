@@ -228,6 +228,9 @@
       <div class="tech-card">
         <div class="tech-name">{{ tech.name }} <span class="tech-specialty">({{ tech.specialty }})</span></div>
         <div class="tech-contact">{{ tech.email or "—" }}{% if tech.phone %} · {{ tech.phone }}{% endif %}</div>
+        {% if tech.location_label %}
+        <div class="tech-updated">📍 {{ tech.location_label }} · радіус {{ tech.service_radius_km|round(0, 'floor')|int if tech.service_radius_km else "—" }} км</div>
+        {% endif %}
         {% if tech.resume_summary %}
         <div class="tech-summary">{{ tech.resume_summary }}</div>
         <div class="tech-updated">Резюме оновлено: {{ tech.resume_uploaded_at.strftime('%Y-%m-%d %H:%M') if tech.resume_uploaded_at else "—" }} UTC</div>
@@ -310,7 +313,10 @@
             —
             {% endif %}
           </td>
-          <td class="description">{{ t.description or "—" }}</td>
+          <td class="description">
+            {{ t.description or "—" }}
+            {% if t.customer_address %}<div class="tech-updated">📍 {{ t.customer_address }}</div>{% endif %}
+          </td>
           <td>{{ t.category or "—" }}</td>
           <td>
             {% if t.priority %}

@@ -17,6 +17,7 @@ from email_notifier import (
     send_confirmation_email,
     send_technician_notification,
 )
+from geocoding import geocode_address, haversine_km
 from models import (
     ALLOWED_PHOTO_TYPES,
     GENDERS,
@@ -39,6 +40,11 @@ from translations import TRANSLATIONS, DEFAULT_LANG
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("tickets", __name__)
+
+# Applied when a technician gives a base location but leaves the radius
+# blank, so an incomplete form still yields a usable service area instead
+# of one that silently never matches anything.
+DEFAULT_SERVICE_RADIUS_KM = 25.0
 
 
 def _admin_token_matches(provided):
@@ -285,6 +291,7 @@ def create_ticket():
     description = payload.get("description")
     customer_email = (payload.get("customer_email") or "").strip() or None
     customer_phone = (payload.get("customer_phone") or "").strip() or None
+    customer_address = (payload.get("customer_address") or "").strip() or None
     match_priority = payload.get("match_priority")
     if match_priority not in MATCH_PRIORITIES:
         match_priority = "quality"
@@ -313,12 +320,17 @@ def create_ticket():
         except ValueError as exc:
             return jsonify({"error": TRANSLATIONS[lang][str(exc)]}), 400
 
+    customer_lat, customer_lng = geocode_address(customer_address) if customer_address else (None, None)
+
     ticket = Ticket(
         title=title,
         description=description,
         status="new",
         customer_email=customer_email,
         customer_phone=customer_phone,
+        customer_address=customer_address,
+        customer_lat=customer_lat,
+        customer_lng=customer_lng,
         photo_data=photo_data,
         photo_content_type=photo_content_type,
         lang=lang,
@@ -507,6 +519,8 @@ def register_technician():
     price_tier = (payload.get("price_tier") or "").strip() or None
     speed_rating = (payload.get("speed_rating") or "").strip() or None
     gender = (payload.get("gender") or "").strip() or None
+    location_label = (payload.get("location") or "").strip() or None
+    radius_raw = payload.get("service_radius_km")
     lang = payload.get("lang")
     if lang not in TRANSLATIONS:
         lang = DEFAULT_LANG
@@ -530,8 +544,27 @@ def register_technician():
     if gender is not None and gender not in GENDERS:
         return jsonify({"error": t["tech_error_invalid_option"]}), 400
 
+    service_radius_km = None
+    if radius_raw not in (None, ""):
+        try:
+            service_radius_km = float(radius_raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": t["tech_error_invalid_option"]}), 400
+        if service_radius_km <= 0:
+            return jsonify({"error": t["tech_error_invalid_option"]}), 400
+
+    if location_label and service_radius_km is None:
+        service_radius_km = DEFAULT_SERVICE_RADIUS_KM
+    elif not location_label:
+        # A radius means nothing without a base location to measure it
+        # from - drop it silently rather than erroring on an edge case
+        # that's more likely a stray value than deliberate input.
+        service_radius_km = None
+
     if _find_technician_by_email(email) is not None:
         return jsonify({"error": t["tech_error_email_exists"]}), 409
+
+    lat, lng = geocode_address(location_label) if location_label else (None, None)
 
     technician = Technician(
         name=name,
@@ -541,6 +574,10 @@ def register_technician():
         price_tier=price_tier,
         speed_rating=speed_rating,
         gender=gender,
+        location_label=location_label,
+        lat=lat,
+        lng=lng,
+        service_radius_km=service_radius_km,
         available=True,
     )
     db.session.add(technician)
@@ -671,23 +708,72 @@ def _technician_tickets(technician):
     return tickets
 
 
+def _open_assignments_in_zone(technician):
+    """Open (technician-less) assignment slots in this technician's own
+    specialty, geocoded and within their service radius - the "pull" side
+    of matching, alongside the AI's automatic "push" assignment at ticket
+    creation. Sorted nearest-first.
+
+    Requires the technician to be available and have their own
+    location/radius on file - same eligibility as automatic push
+    assignment (see select_technician) - and returns nothing otherwise
+    rather than showing an unbounded list of every open slot in their
+    specialty.
+    """
+    if not technician.available:
+        return []
+    if technician.lat is None or technician.lng is None or not technician.service_radius_km:
+        return []
+
+    open_assignments = (
+        TicketAssignment.query.join(Ticket)
+        .filter(
+            TicketAssignment.specialty == technician.specialty,
+            TicketAssignment.technician_id.is_(None),
+            Ticket.customer_lat.isnot(None),
+            Ticket.customer_lng.isnot(None),
+            Ticket.status.in_(("new", "pending_assignment", "assigned")),
+        )
+        .all()
+    )
+
+    zone = []
+    for assignment in open_assignments:
+        distance_km = haversine_km(
+            assignment.ticket.customer_lat, assignment.ticket.customer_lng, technician.lat, technician.lng
+        )
+        if distance_km <= technician.service_radius_km:
+            zone.append((assignment, round(distance_km, 1)))
+
+    zone.sort(key=lambda pair: pair[1])
+    return zone
+
+
+def _render_technician_dashboard(email, technician, error=None):
+    tickets = _technician_tickets(technician) if technician else []
+    zone_assignments = _open_assignments_in_zone(technician) if technician else []
+    return render_template(
+        "technician_dashboard.html",
+        email=email,
+        technician=technician,
+        tickets=tickets,
+        zone_assignments=zone_assignments,
+        error=error,
+    )
+
+
 @bp.route("/technician/dashboard", methods=["GET"])
 def technician_dashboard_view():
     email = (request.args.get("email") or "").strip()
     technician = None
-    tickets = []
     error = None
 
     if email:
         technician = _find_technician_by_email(email)
         if technician is None:
             error = "Майстра з таким email не знайдено."
-        else:
-            tickets = _technician_tickets(technician)
 
-    return render_template(
-        "technician_dashboard.html", email=email, technician=technician, tickets=tickets, error=error
-    )
+    return _render_technician_dashboard(email, technician, error)
 
 
 def _ticket_has_technician(ticket, technician):
@@ -726,10 +812,7 @@ def technician_complete_ticket(ticket_id):
                     "Не вдалося надіслати email про завершення заявки #%s", ticket.id
                 )
 
-    tickets = _technician_tickets(technician) if technician else []
-    return render_template(
-        "technician_dashboard.html", email=email, technician=technician, tickets=tickets, error=error
-    )
+    return _render_technician_dashboard(email, technician, error)
 
 
 def _maybe_confirm_ticket(ticket):
@@ -830,10 +913,44 @@ def technician_respond_ticket(ticket_id):
                 _decline_and_reassign(ticket, assignment, technician)
             db.session.commit()
 
-    tickets = _technician_tickets(technician) if technician else []
-    return render_template(
-        "technician_dashboard.html", email=email, technician=technician, tickets=tickets, error=error
-    )
+    return _render_technician_dashboard(email, technician, error)
+
+
+@bp.route("/technician/assignments/<int:assignment_id>/claim", methods=["POST"])
+def technician_claim_assignment(assignment_id):
+    """A technician self-assigns an open (technician-less) slot from their
+    "available in your zone" list - the pull counterpart to the automatic
+    push assignment done at ticket creation. Refuses if the slot has
+    already been filled (by push assignment, a reassignment, or another
+    technician claiming it first) or isn't this technician's specialty.
+    """
+    email = (request.form.get("email") or "").strip()
+    technician = _find_technician_by_email(email)
+    assignment = TicketAssignment.query.get(assignment_id)
+    error = None
+
+    if technician is None:
+        error = "Майстра з таким email не знайдено."
+    elif not technician.available:
+        error = "Ваш профіль наразі позначено як недоступний."
+    elif (
+        assignment is None
+        or assignment.specialty != technician.specialty
+        or assignment.technician_id is not None
+    ):
+        error = "Цю заявку вже взяв інший майстер, або вона більше не доступна."
+    else:
+        ticket = assignment.ticket
+        assignment.technician_id = technician.id
+        assignment.reasoning = "Майстер самостійно взяв заявку зі списку доступних у своїй зоні."
+        if ticket.assigned_to is None:
+            ticket.assigned_to = technician.id
+            ticket.assignment_reasoning = assignment.reasoning
+        if all(a.technician_id for a in ticket.assignments):
+            ticket.status = "assigned"
+        db.session.commit()
+
+    return _render_technician_dashboard(email, technician, error)
 
 
 @bp.route("/tickets/<int:ticket_id>/review", methods=["GET"])
