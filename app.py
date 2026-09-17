@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
@@ -13,6 +14,14 @@ from translations import DEFAULT_LANG, TRANSLATIONS
 load_dotenv()
 
 migrate = Migrate()
+
+# `flask db ...` (Flask-Migrate's CLI) has to import this module to reach
+# current_app/db - which would otherwise run create_all() below before
+# Alembic gets a chance to CREATE TABLE itself, breaking `flask db upgrade`
+# on a fresh database with "table already exists". Skip the dev-convenience
+# seed/create_all in that one case; it still runs for `python app.py`,
+# gunicorn, and pytest (none of their sys.argv[0] start with "flask").
+_RUNNING_UNDER_FLASK_CLI = os.path.basename(sys.argv[0] if sys.argv else "").lower().startswith("flask")
 
 SEED_TECHNICIANS = [
     {
@@ -83,14 +92,15 @@ def create_app():
     def health():
         return jsonify({"status": "ok", "service": "maintenance-ticket-router"})
 
-    with app.app_context():
-        # Schema changes now go through Alembic (migrations/versions/, run via
-        # `flask db upgrade`) - this create_all() is just local/test
-        # convenience for building a brand-new DB from scratch. It's a no-op
-        # against prod: create_all() only creates tables that don't exist yet,
-        # it never ALTERs an existing table to add a column.
-        db.create_all()
-        seed_technicians()
+    if not _RUNNING_UNDER_FLASK_CLI:
+        with app.app_context():
+            # Schema changes now go through Alembic (migrations/versions/, run
+            # via `flask db upgrade`) - this create_all() is just local/test
+            # convenience for building a brand-new DB from scratch. It's a
+            # no-op against prod: create_all() only creates tables that don't
+            # exist yet, it never ALTERs an existing table to add a column.
+            db.create_all()
+            seed_technicians()
 
     return app
 
